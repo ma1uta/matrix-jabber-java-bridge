@@ -1,0 +1,80 @@
+xmpp:
+  componentName: 'mjjb'
+  sharedSecret: 'secret'
+  hostname: 'localhost'
+  port: 5223
+matrix:
+  homeserver: 'https://matrix.localhost:8448'
+  accessToken: 'as_token'
+  masterUserId: '@xmpp_master:localhost'
+
+
+httpClient:
+  gzipEnabled: false
+  gzipEnabledForRequests: false
+  chunkedEncodingEnabled: false
+  timeout: 20s
+logging:
+  level: ERROR
+  appenders:
+    - type: console
+      target: stderr
+    - type: file
+      currentLogFilename: mjjb.log
+      archive: true
+      archivedLogFilenamePattern: mjjb-%d.log
+      archivedFileCount: 2
+      immediateFlush: true
+database:
+  driverClass: org.postgresql.Driver
+  user: mxtoot
+  password: mxtoot
+  url: jdbc:postgresql://localhost/mjjb
+  properties:
+    charSet: UTF-8
+    hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+    hibernate.hbm2ddl.auto: "update"
+  maxWaitForConnection: 1s
+  validationQuery: "/* MyApplication Health Check */ SELECT 1"
+  minSize: 8
+  maxSize: 32
+  checkConnectionWhileIdle: false
+server:
+  applicationConnectors:
+    - type: https
+      port: 8444
+      keyStorePath: keystore.pkcs12
+      keyStorePassword: keystorePassword
+      validateCerts: false
+      excludedCipherSuites:
+        - SSL_RSA_WITH_DES_CBC_SHA
+        - SSL_DHE_RSA_WITH_DES_CBC_SHA
+        - SSL_DHE_DSS_WITH_DES_CBC_SHA
+        - SSL_RSA_EXPORT_WITH_RC4_40_MD5
+        - SSL_RSA_EXPORT_WITH_DES40_CBC_SHA
+        - SSL_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA
+        - SSL_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA
+  adminConnectors:
+    - type: http
+      port: 8445
+      bindHost: 127.0.0.1
+  requestLog:
+    appenders:
+      - type: console
+
+
+
+### Registration part ###
+id: "mxtoot"
+url: "https://app.me:8443"
+as_token: 'as_token'
+hs_token: 'ms_token'
+sender_localpart: 'mjjb'
+namespaces:
+  users:
+    - exclusive: true
+      regex: '@xmpp_*'
+  rooms: []
+  aliases:
+    - exclusive: false
+      regex: '#xmpp_*'
