@@ -44,6 +44,8 @@ public class TransportConfiguration {
 
     private String masterUserId;
 
+    private String prefix;
+
     public TransportConfiguration(BridgeConfiguration config) {
         this.xmppComponentName = Objects.requireNonNull(config.getXmpp().getComponentName());
         this.xmppShareSecret = Objects.requireNonNull(config.getXmpp().getSharedSecret());
@@ -53,6 +55,7 @@ public class TransportConfiguration {
         this.matrixHomeserver = Objects.requireNonNull(config.getMatrix().getHomeserver());
         this.accessToken = Objects.requireNonNull(config.getMatrix().getAccessToken());
         this.masterUserId = Objects.requireNonNull(config.getMatrix().getMasterUserId());
+        this.prefix = Objects.requireNonNull(config.getMatrix().getPrefix());
     }
 
     public String getXmppComponentName() {
@@ -109,5 +112,13 @@ public class TransportConfiguration {
 
     public void setMasterUserId(String masterUserId) {
         this.masterUserId = masterUserId;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
     }
 }

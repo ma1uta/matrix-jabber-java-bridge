@@ -37,7 +37,7 @@ public class PersistenceService {
 
     private final MatrixTransactionDao txDao;
 
-    private PersistenceService(RoomAliasDao aliasDao, AppServerUserDao userDao, MatrixTransactionDao txDao) {
+    public PersistenceService(RoomAliasDao aliasDao, AppServerUserDao userDao, MatrixTransactionDao txDao) {
         this.aliasDao = aliasDao;
         this.userDao = userDao;
         this.txDao = txDao;
@@ -77,6 +77,9 @@ public class PersistenceService {
         return action.apply(this);
     }
 
+    /**
+     * Builder for the service.
+     */
     public static class Builder {
 
         private RoomAliasDao aliasDao;
@@ -118,7 +121,7 @@ public class PersistenceService {
         }
 
         /**
-         * Add {@link UnitOfWorkAwareProxyFactory}
+         * Add {@link UnitOfWorkAwareProxyFactory}.
          *
          * @param proxyFactory proxy to wrap transaction methods.
          * @return builder.

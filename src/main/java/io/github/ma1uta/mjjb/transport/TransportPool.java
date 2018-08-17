@@ -33,6 +33,7 @@ import rocks.xmpp.core.session.XmppSessionConfiguration;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.core.Response;
 
@@ -91,16 +92,22 @@ public class TransportPool implements Managed {
         if (transport != null) {
             transport.event(event);
         } else if (event.getContent() instanceof RoomAliases) {
-            ((RoomAliases) event.getContent()).getAliases().stream()
-                .filter(alias -> RoomAliasDao.ROOM_PATTERN.matcher(Id.localpart(alias)).matches()).findFirst()
-                .ifPresent(s -> {
-                    try {
-                        runTransport(event.getRoomId(), s);
-                    } catch (XmppException e) {
-                        throw new MatrixException(MatrixException.M_INTERNAL, e.getMessage(),
-                            Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
-                    }
-                });
+            Optional<String> mappedAlias = ((RoomAliases) event.getContent()).getAliases().stream()
+                .filter(alias -> RoomAliasDao.ROOM_PATTERN.matcher(Id.localpart(alias)).matches()).findFirst();
+            if (mappedAlias.isPresent()) {
+                try {
+                    runTransport(event.getRoomId(), mappedAlias.get());
+                } catch (XmppException e) {
+                    throw new MatrixException(MatrixException.M_INTERNAL, e.getMessage(),
+                        Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
+                }
+            } else {
+                try {
+                    getTransports().get(event.getRoomId()).close();
+                } catch (IOException e) {
+                    LOGGER.error("Cannot close connection", e);
+                }
+            }
         } else {
             LOGGER.error("Not found mapped room with id: {}", event.getRoomId());
         }
@@ -132,17 +139,23 @@ public class TransportPool implements Managed {
      * @throws XmppException when cannot connect to the xmpp conference.
      */
     public void runTransport(String roomId, String alias) throws XmppException {
-        RoomAlias roomAlias;
         RoomAliasDao aliasDao = getService().getAliasDao();
-        synchronized (aliasDao) {
-            roomAlias = aliasDao.findByAlias(alias);
-            if (roomAlias == null) {
-                roomAlias = aliasDao.persist(alias, roomId);
-            } else if (!roomAlias.getRoomId().equals(roomId)) {
-                roomAlias = aliasDao.persist(roomAlias);
-            }
+        RoomAlias roomAlias;
+        synchronized (getService()) {
+            roomAlias = getService().tx(s -> {
+                RoomAlias founded = aliasDao.findByAlias(alias);
+                if (founded == null) {
+                    return aliasDao.persist(alias, roomId);
+                } else if (!founded.getRoomId().equals(roomId)) {
+                    return aliasDao.persist(founded);
+                } else {
+                    return founded;
+                }
+            });
         }
-        runTransport(roomAlias);
+        if (roomAlias != null) {
+            runTransport(roomAlias);
+        }
     }
 
     /**

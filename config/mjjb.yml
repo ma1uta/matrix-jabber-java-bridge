@@ -1,13 +1,13 @@
 xmpp:
   componentName: 'mjjb'
   sharedSecret: 'secret'
-  hostname: 'localhost'
+  hostname: 'plyuk.rocks'
   port: 5223
 matrix:
   homeserver: 'https://matrix.localhost:8448'
   accessToken: 'as_token'
   masterUserId: '@xmpp_master:localhost'
-
+  prefix: 'xmpp_'
 
 httpClient:
   gzipEnabled: false

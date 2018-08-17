@@ -25,6 +25,7 @@ import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.Prese
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import io.github.ma1uta.jeon.exception.MatrixException;
 import io.github.ma1uta.matrix.Event;
 import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.client.MatrixClient;
@@ -34,7 +35,6 @@ import io.github.ma1uta.matrix.events.Presence;
 import io.github.ma1uta.matrix.events.RoomMember;
 import io.github.ma1uta.matrix.events.RoomMessage;
 import io.github.ma1uta.matrix.events.messages.Text;
-import io.github.ma1uta.mjjb.dao.AppServerUserDao;
 import io.github.ma1uta.mjjb.model.RoomAlias;
 import io.github.ma1uta.mjjb.xmpp.ExternalComponentWithResource;
 import org.slf4j.Logger;
@@ -83,8 +83,13 @@ public class Transport implements Closeable {
 
     private BiMap<String, String> xmppToMxUsers = HashBiMap.create();
 
+    private String prefix;
+
+    private TransportConfiguration config;
+
     public Transport(TransportConfiguration configuration, XmppSessionConfiguration xmppSessionConfiguration, Client httpClient,
                      RoomAlias roomAlias, String masterUserId, PersistenceService service) {
+        this.config = configuration;
         this.xmppComponent = ExternalComponentWithResource
             .create(configuration.getXmppComponentName(), configuration.getXmppShareSecret(), xmppSessionConfiguration,
                 configuration.getXmppHostName(), configuration.getXmppPort());
@@ -94,6 +99,7 @@ public class Transport implements Closeable {
         this.masterUserId = masterUserId;
         this.masterNick = nickInXmpp(masterUserId);
         this.service = service;
+        this.prefix = configuration.getPrefix();
     }
 
     public ExternalComponentWithResource getXmppComponent() {
@@ -134,6 +140,14 @@ public class Transport implements Closeable {
 
     public String getMasterNick() {
         return masterNick;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public TransportConfiguration getConfig() {
+        return config;
     }
 
     /**
@@ -254,25 +268,31 @@ public class Transport implements Closeable {
             }
 
             MatrixClient mx = getMatrixComponent();
-            String localpart = nickInMatrix(xmppNick);
-            AppServerUserDao userDao = getService().getUserDao();
+            String displayName = nickInMatrix(xmppNick);
+            String localpart = getPrefix() + displayName;
             String userId;
             synchronized (matrixMonitor) {
-                synchronized (userDao) {
-                    if (!userDao.exist(localpart)) {
-                        RegisterRequest registerRequest = new RegisterRequest();
-                        registerRequest.setUsername(localpart);
-                        registerRequest.setInitialDeviceDisplayName(localpart);
-                        mx.setUserId(getMasterUserId());
-                        mx.account().register(registerRequest);
-                        mx.profile().setDisplayName(localpart);
-                        userDao.save(localpart);
-                    }
+                synchronized (getService()) {
+                    getService().tx(s -> {
+                        if (!s.getUserDao().exist(localpart)) {
+                            try {
+                                RegisterRequest registerRequest = new RegisterRequest();
+                                registerRequest.setUsername(localpart);
+                                registerRequest.setInitialDeviceDisplayName(displayName);
+                                mx.setUserId(getMasterUserId());
+                                mx.account().register(registerRequest);
+                                mx.profile().setDisplayName(displayName);
+                            } catch (MatrixException e) {
+                                LOGGER.warn("Failed to register new user.", e);
+                            }
+                            s.getUserDao().save(localpart);
+                        }
+                    });
                     userId = "@" + localpart + ":" + new URL(getMatrixComponent().getHomeserverUrl()).getHost();
                 }
                 getXmppToMxUsers().put(xmppNick, userId);
 
-                mx.setUserId(localpart);
+                mx.setUserId(userId);
                 mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
             }
         } catch (Exception e) {
@@ -303,7 +323,7 @@ public class Transport implements Closeable {
     }
 
     protected String nickInMatrix(String nick) {
-        return "xmpp_" + nick;
+        return nick;
     }
 
     protected Jid toJid(String nick) {
@@ -393,14 +413,14 @@ public class Transport implements Closeable {
     public void close() throws IOException {
         MatrixClient mx = getMatrixComponent();
         mx.setUserId(getMasterUserId());
-        getXmppToMxUsers().forEach((nick, userId) -> {
+        getXmppToMxUsers().values().forEach(userId -> {
             mx.setUserId(userId);
             mx.room().leave(getRoomAlias().getRoomId());
         });
         getXmppToMxUsers().clear();
 
         ExternalComponentWithResource xmpp = getXmppComponent();
-        getMxToXmppUsers().forEach((userId, nick) -> {
+        getMxToXmppUsers().values().forEach(nick -> {
             xmpp.setConnectedResource(toJid(nick));
             getChatRoom().exit();
         });

@@ -34,12 +34,14 @@ import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
-import io.github.ma1uta.mjjb.transport.PuppetUser;
-import io.github.ma1uta.mjjb.model.RoomAlias;
+import io.github.ma1uta.mjjb.dao.AppServerUserDao;
 import io.github.ma1uta.mjjb.dao.RoomAliasDao;
 import io.github.ma1uta.mjjb.matrix.ApplicationServiceEndpoint;
+import io.github.ma1uta.mjjb.model.AppServerUser;
+import io.github.ma1uta.mjjb.model.RoomAlias;
 import io.github.ma1uta.mjjb.transaction.MatrixTransaction;
 import io.github.ma1uta.mjjb.transaction.MatrixTransactionDao;
+import io.github.ma1uta.mjjb.transport.PersistenceService;
 import io.github.ma1uta.mjjb.transport.TransportConfiguration;
 import io.github.ma1uta.mjjb.transport.TransportPool;
 import org.hibernate.SessionFactory;
@@ -58,7 +60,7 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
     private static final Logger LOGGER = LoggerFactory.getLogger(BridgeApplication.class);
 
     private HibernateBundle<BridgeConfiguration> hibernateBundle = new HibernateBundle<BridgeConfiguration>(RoomAlias.class,
-        MatrixTransaction.class, PuppetUser.class) {
+        MatrixTransaction.class, AppServerUser.class) {
         @Override
         public PooledDataSourceFactory getDataSourceFactory(BridgeConfiguration configuration) {
             return configuration.getDatabase();
@@ -102,35 +104,31 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
         RoomAliasDao aliasDao = proxyFactory.create(RoomAliasDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
         MatrixTransactionDao transactionDao = proxyFactory
             .create(MatrixTransactionDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
-        PuppetUserDao userDao = proxyFactory.create(PuppetUserDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
+        AppServerUserDao userDao = proxyFactory.create(AppServerUserDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
+        PersistenceService service = new PersistenceService.Builder().aliasDao(aliasDao).txDao(transactionDao).userDao(userDao)
+            .proxy(proxyFactory).build();
 
-        checkMaster(configuration.getMatrix(), client, userDao);
+        checkMaster(configuration.getMatrix(), client, service);
 
-        TransportPool pool = new TransportPool(xmppSessionConfiguration, new TransportConfiguration(configuration), client, service,
-            aliasDao,
-            userDao);
-        environment.jersey().register(proxyFactory.create(ApplicationServiceEndpoint.class,
-            new Class[] {TransportPool.class, MatrixTransactionDao.class},
-            new Object[] {pool, transactionDao}));
+        TransportPool pool = new TransportPool(xmppSessionConfiguration, new TransportConfiguration(configuration), client, service);
+        environment.jersey().register(new ApplicationServiceEndpoint(pool, service));
         environment.lifecycle().manage(pool);
     }
 
-    protected void checkMaster(MatrixConfig config, Client client, PuppetUserDao dao) {
-        if (!dao.isMasterAvailable()) {
-            try {
-                MatrixClient mxClient = new MatrixClient(config.getHomeserver(), client, false, false);
-                mxClient.setAccessToken(config.getAccessToken());
-                RegisterRequest request = new RegisterRequest();
-                request.setUsername(Id.localpart(config.getMasterUserId()));
-                mxClient.account().register(request);
-            } catch (MatrixException e) {
-                LOGGER.warn("master user already registered", e);
+    protected void checkMaster(MatrixConfig config, Client client, PersistenceService service) {
+        service.tx(s -> {
+            if (!s.getUserDao().exist(config.getMasterUserId())) {
+                try {
+                    MatrixClient mxClient = new MatrixClient(config.getHomeserver(), client, false, false);
+                    mxClient.setAccessToken(config.getAccessToken());
+                    RegisterRequest request = new RegisterRequest();
+                    request.setUsername(Id.localpart(config.getMasterUserId()));
+                    mxClient.account().register(request);
+                } catch (MatrixException e) {
+                    LOGGER.warn("master user already registered", e);
+                }
+                s.getUserDao().save(config.getMasterUserId());
             }
-            PuppetUser masterUser = new PuppetUser();
-            masterUser.setUserId(config.getMasterUserId());
-            masterUser.setMaster(true);
-            masterUser.setRoomId("pass-unique-id");
-            dao.persist(masterUser);
-        }
+        });
     }
 }

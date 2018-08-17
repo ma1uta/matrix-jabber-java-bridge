@@ -34,6 +34,9 @@ public class MatrixConfig {
     @NotBlank
     private String masterUserId;
 
+    @NotBlank
+    private String prefix;
+
     public String getHomeserver() {
         return homeserver;
     }
@@ -56,5 +59,13 @@ public class MatrixConfig {
 
     public void setMasterUserId(String masterUserId) {
         this.masterUserId = masterUserId;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
     }
 }
