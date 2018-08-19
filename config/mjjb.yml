@@ -1,7 +1,7 @@
 xmpp:
-  componentName: 'mjjb'
+  componentName: 'mjjb.xmpp.server.tld'
   sharedSecret: 'secret'
-  hostname: 'plyuk.rocks'
+  hostname: 'xmpp.server.tld'
   port: 5223
 matrix:
   homeserver: 'https://matrix.localhost:8448'
@@ -65,7 +65,7 @@ server:
 
 
 ### Registration part ###
-id: "mxtoot"
+id: "mjjb"
 url: "https://app.me:8443"
 as_token: 'as_token'
 hs_token: 'ms_token'
