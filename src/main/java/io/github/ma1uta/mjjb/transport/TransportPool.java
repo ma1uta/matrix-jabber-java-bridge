@@ -101,12 +101,6 @@ public class TransportPool implements Managed {
                     throw new MatrixException(MatrixException.M_INTERNAL, e.getMessage(),
                         Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
                 }
-            } else {
-                try {
-                    getTransports().get(event.getRoomId()).close();
-                } catch (IOException e) {
-                    LOGGER.error("Cannot close connection", e);
-                }
             }
         } else {
             LOGGER.error("Not found mapped room with id: {}", event.getRoomId());
@@ -139,10 +133,10 @@ public class TransportPool implements Managed {
      * @throws XmppException when cannot connect to the xmpp conference.
      */
     public void runTransport(String roomId, String alias) throws XmppException {
-        RoomAliasDao aliasDao = getService().getAliasDao();
         RoomAlias roomAlias;
         synchronized (getService()) {
             roomAlias = getService().tx(s -> {
+                RoomAliasDao aliasDao = s.getAliasDao();
                 RoomAlias founded = aliasDao.findByAlias(alias);
                 if (founded == null) {
                     return aliasDao.persist(alias, roomId);
@@ -173,12 +167,14 @@ public class TransportPool implements Managed {
 
     @Override
     public void start() {
-        getService().getAliasDao().findAll().forEach(roomList -> {
-            try {
-                runTransport(roomList);
-            } catch (XmppException e) {
-                LOGGER.error("Cannot connect to the conference", e);
-            }
+        getService().tx(s -> {
+            s.getAliasDao().findAll().forEach(roomList -> {
+                try {
+                    runTransport(roomList);
+                } catch (XmppException e) {
+                    LOGGER.error("Cannot connect to the conference", e);
+                }
+            });
         });
     }
 

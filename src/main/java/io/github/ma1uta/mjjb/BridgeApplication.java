@@ -19,6 +19,7 @@ package io.github.ma1uta.mjjb;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.dropwizard.Application;
 import io.dropwizard.client.JerseyClientBuilder;
 import io.dropwizard.configuration.EnvironmentVariableSubstitutor;
@@ -44,7 +45,6 @@ import io.github.ma1uta.mjjb.transaction.MatrixTransactionDao;
 import io.github.ma1uta.mjjb.transport.PersistenceService;
 import io.github.ma1uta.mjjb.transport.TransportConfiguration;
 import io.github.ma1uta.mjjb.transport.TransportPool;
-import org.hibernate.SessionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.session.XmppSessionConfiguration;
@@ -83,36 +83,49 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
             new SubstitutingSourceProvider(bootstrap.getConfigurationSourceProvider(), new EnvironmentVariableSubstitutor(false)));
         bootstrap.addBundle(new SslReloadBundle());
 
-        bootstrap.getObjectMapper().enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY);
+        initObjectMapper(bootstrap);
+
         bootstrap.addBundle(hibernateBundle);
+    }
+
+    protected void initObjectMapper(Bootstrap<BridgeConfiguration> bootstrap) {
+        ObjectMapper objectMapper = bootstrap.getObjectMapper();
+        objectMapper.enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY);
+        objectMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     @Override
     public void run(BridgeConfiguration configuration, Environment environment) {
-        environment.getObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
-        environment.getObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
         Client client = new JerseyClientBuilder(environment).using(configuration.getHttpClient()).build("httpClient");
 
-        XmppSessionConfiguration.Builder xmppSessionBuilder = XmppSessionConfiguration.builder();
-        if (configuration.getXmpp().isConsole()) {
-            xmppSessionBuilder.debugger(ConsoleDebugger.class);
-        }
-        XmppSessionConfiguration xmppSessionConfiguration = xmppSessionBuilder.build();
+        XmppSessionConfiguration xmppSessionConfiguration = initXmppSessionConfiguration(configuration);
 
-        UnitOfWorkAwareProxyFactory proxyFactory = new UnitOfWorkAwareProxyFactory(hibernateBundle);
-        RoomAliasDao aliasDao = proxyFactory.create(RoomAliasDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
-        MatrixTransactionDao transactionDao = proxyFactory
-            .create(MatrixTransactionDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
-        AppServerUserDao userDao = proxyFactory.create(AppServerUserDao.class, SessionFactory.class, hibernateBundle.getSessionFactory());
-        PersistenceService service = new PersistenceService.Builder().aliasDao(aliasDao).txDao(transactionDao).userDao(userDao)
-            .proxy(proxyFactory).build();
+        PersistenceService service = initPersistenceService();
 
         checkMaster(configuration.getMatrix(), client, service);
 
         TransportPool pool = new TransportPool(xmppSessionConfiguration, new TransportConfiguration(configuration), client, service);
+
         environment.jersey().register(new ApplicationServiceEndpoint(pool, service));
         environment.lifecycle().manage(pool);
+    }
+
+    protected PersistenceService initPersistenceService() {
+        UnitOfWorkAwareProxyFactory proxyFactory = new UnitOfWorkAwareProxyFactory(hibernateBundle);
+        RoomAliasDao aliasDao = new RoomAliasDao(hibernateBundle.getSessionFactory());
+        MatrixTransactionDao transactionDao = new MatrixTransactionDao(hibernateBundle.getSessionFactory());
+        AppServerUserDao userDao = new AppServerUserDao(hibernateBundle.getSessionFactory());
+
+        return new PersistenceService.Builder().aliasDao(aliasDao).txDao(transactionDao).userDao(userDao).proxy(proxyFactory).build();
+    }
+
+    protected XmppSessionConfiguration initXmppSessionConfiguration(BridgeConfiguration configuration) {
+        XmppSessionConfiguration.Builder xmppSessionBuilder = XmppSessionConfiguration.builder();
+        if (configuration.getXmpp().isConsole()) {
+            xmppSessionBuilder.debugger(ConsoleDebugger.class);
+        }
+        return xmppSessionBuilder.build();
     }
 
     protected void checkMaster(MatrixConfig config, Client client, PersistenceService service) {

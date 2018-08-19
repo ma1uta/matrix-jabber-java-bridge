@@ -22,6 +22,7 @@ import static io.github.ma1uta.matrix.Event.MembershipState.LEAVE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.OFFLINE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.ONLINE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.UNAVAILABLE;
+import static io.github.ma1uta.mjjb.dao.RoomAliasDao.ROOM_PATTERN;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
@@ -32,6 +33,7 @@ import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
 import io.github.ma1uta.matrix.client.model.presence.PresenceStatus;
 import io.github.ma1uta.matrix.events.Presence;
+import io.github.ma1uta.matrix.events.RoomAliases;
 import io.github.ma1uta.matrix.events.RoomMember;
 import io.github.ma1uta.matrix.events.RoomMessage;
 import io.github.ma1uta.matrix.events.messages.Text;
@@ -52,6 +54,9 @@ import rocks.xmpp.extensions.muc.OccupantEvent;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import javax.ws.rs.client.Client;
 
 /**
@@ -69,8 +74,6 @@ public class Transport implements Closeable {
 
     private MatrixClient matrixComponent;
 
-    private ChatRoom chatRoom;
-
     private RoomAlias roomAlias;
 
     private String masterUserId;
@@ -83,13 +86,12 @@ public class Transport implements Closeable {
 
     private BiMap<String, String> xmppToMxUsers = HashBiMap.create();
 
-    private String prefix;
+    private Map<String, ChatRoom> chatRooms = new HashMap<>();
 
-    private TransportConfiguration config;
+    private String prefix;
 
     public Transport(TransportConfiguration configuration, XmppSessionConfiguration xmppSessionConfiguration, Client httpClient,
                      RoomAlias roomAlias, String masterUserId, PersistenceService service) {
-        this.config = configuration;
         this.xmppComponent = ExternalComponentWithResource
             .create(configuration.getXmppComponentName(), configuration.getXmppShareSecret(), xmppSessionConfiguration,
                 configuration.getXmppHostName(), configuration.getXmppPort());
@@ -114,12 +116,14 @@ public class Transport implements Closeable {
         return roomAlias;
     }
 
-    public ChatRoom getChatRoom() {
-        return chatRoom;
-    }
-
-    protected void setChatRoom(ChatRoom chatRoom) {
-        this.chatRoom = chatRoom;
+    /**
+     * Find the chat room of the specified nick.
+     *
+     * @param nick xmpp nick
+     * @return chat room.
+     */
+    public ChatRoom getChatRoom(String nick) {
+        return getChatRooms().get(nick);
     }
 
     public String getMasterUserId() {
@@ -146,8 +150,8 @@ public class Transport implements Closeable {
         return prefix;
     }
 
-    public TransportConfiguration getConfig() {
-        return config;
+    public Map<String, ChatRoom> getChatRooms() {
+        return chatRooms;
     }
 
     /**
@@ -158,33 +162,31 @@ public class Transport implements Closeable {
      * @throws XmppException when cannot connect to the xmpp server.
      */
     public void init() throws XmppException {
-        initXmpp();
-        initTransport();
-    }
-
-    protected void initXmpp() {
-        ExternalComponentWithResource xmppComponent = getXmppComponent();
-        MultiUserChatManager chatManager = xmppComponent.getManager(MultiUserChatManager.class);
-        setChatRoom(chatManager.createChatRoom(Jid.of(getRoomAlias().getConferenceUrl())));
-    }
-
-    protected void initTransport() throws XmppException {
         ExternalComponentWithResource xmpp = getXmppComponent();
+        MultiUserChatManager chatManager = xmpp.getManager(MultiUserChatManager.class);
 
-        getChatRoom().addOccupantListener(this::xmppOccupant);
+        Jid masterJid = toJid(getMasterNick());
+        ChatRoom chatRoom = chatManager.createChatRoom(Jid.of(getRoomAlias().getConferenceUrl()));
+        chatRoom.addOccupantListener(this::xmppOccupant);
+        getChatRooms().put(getMasterNick(), chatRoom);
+
         xmpp.addInboundPresenceListener(this::xmppPresence);
         xmpp.addInboundMessageListener(this::xmppMessage);
 
         xmpp.connect();
 
-        xmpp.setConnectedResource(toJid(getMasterNick()));
-        getChatRoom().enter(getMasterNick());
-        getChatRoom().discoverOccupants().thenAccept(occupants -> occupants.forEach(this::xmppNickEntered));
+        synchronized (xmppMonitor) {
+            xmpp.setConnectedResource(masterJid);
+            chatRoom.enter(getMasterNick()).thenAccept(presence -> LOGGER.debug(presence.toString()));
+            chatRoom.discoverOccupants().thenAccept(occupants -> occupants.forEach(this::xmppNickEntered));
+        }
 
-        MatrixClient mx = getMatrixComponent();
-        mx.setUserId(getMasterUserId());
-        mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
-        mx.event().joinedMembers(getRoomAlias().getRoomId()).getJoined().forEach((userId, roomMember) -> matrixNickEnter(userId));
+        synchronized (matrixMonitor) {
+            MatrixClient mx = getMatrixComponent();
+            mx.setUserId(getMasterUserId());
+            mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
+            mx.event().joinedMembers(getRoomAlias().getRoomId()).getJoined().forEach((userId, roomMember) -> matrixNickEnter(userId));
+        }
     }
 
     protected void xmppPresence(PresenceEvent presenceEvent) {
@@ -250,7 +252,8 @@ public class Transport implements Closeable {
     protected void xmppMessage(MessageEvent messageEvent) {
         Message message = messageEvent.getMessage();
         String mxUser = getXmppToMxUsers().get(message.getFrom().getResource());
-        if (mxUser == null || !getMasterNick().equals(message.getTo().getResource())) {
+        if (mxUser == null || (!getMasterNick().equals(message.getTo().getResource()) && !getMasterNick()
+            .equals(message.getTo().getLocal()))) {
             return;
         }
 
@@ -293,6 +296,7 @@ public class Transport implements Closeable {
                 getXmppToMxUsers().put(xmppNick, userId);
 
                 mx.setUserId(userId);
+                mx.profile().setDisplayName(displayName);
                 mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
             }
         } catch (Exception e) {
@@ -301,20 +305,24 @@ public class Transport implements Closeable {
     }
 
     protected void matrixNickEnter(String userId) {
+        String nick = nickInXmpp(userId);
         try {
             if (getXmppToMxUsers().inverse().get(userId) != null || getMasterUserId().equals(userId)) {
                 return;
             }
 
             synchronized (xmppMonitor) {
-                String nick = nickInXmpp(userId);
                 getMxToXmppUsers().put(userId, nick);
 
-                getXmppComponent().setConnectedResource(toJid(nick));
-                getChatRoom().enter(nick);
+                ExternalComponentWithResource xmpp = getXmppComponent();
+
+                xmpp.setConnectedResource(toJid(nick));
+                ChatRoom chatRoom = xmpp.getManager(MultiUserChatManager.class).createChatRoom(Jid.of(getRoomAlias().getConferenceUrl()));
+                chatRoom.enter(nick).thenAccept(presence -> LOGGER.debug(presence.toString()));
+                getChatRooms().put(nick, chatRoom);
             }
         } catch (Exception e) {
-            LOGGER.error("Cannot fetch occupants", e);
+            LOGGER.error(String.format("%s cannot join with nick %s", userId, nick), e);
         }
     }
 
@@ -327,7 +335,7 @@ public class Transport implements Closeable {
     }
 
     protected Jid toJid(String nick) {
-        return Jid.of(getXmppComponent().getDomain() + "/" + nick);
+        return Jid.of(nick, getXmppComponent().getDomain(), nick);
     }
 
     /**
@@ -349,6 +357,17 @@ public class Transport implements Closeable {
             matrixPresence(event, jid);
         } else if (event.getContent() instanceof RoomMember) {
             matrixOccupant(event);
+        } else if (event.getContent() instanceof RoomAliases) {
+            RoomAliases aliases = (RoomAliases) event.getContent();
+            Optional<String> foundAlias = aliases.getAliases().stream().filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
+                .findAny();
+            if (!foundAlias.isPresent()) {
+                try {
+                    close();
+                } catch (IOException e) {
+                    LOGGER.error("Cannot close xmpp session.");
+                }
+            }
         }
     }
 
@@ -357,7 +376,7 @@ public class Transport implements Closeable {
         Text text = (Text) event.getContent();
         synchronized (xmppMonitor) {
             xmpp.setConnectedResource(jid);
-            getChatRoom().sendMessage(text.getBody());
+            getChatRoom(jid.getLocal()).sendMessage(text.getBody());
         }
     }
 
@@ -377,7 +396,7 @@ public class Transport implements Closeable {
 
                 synchronized (xmppMonitor) {
                     getXmppComponent().setConnectedResource(toJid(nick));
-                    getChatRoom().exit();
+                    getChatRooms().remove(nick).exit();
                     getMxToXmppUsers().remove(stateKey, nick);
                 }
                 break;
@@ -418,13 +437,17 @@ public class Transport implements Closeable {
             mx.room().leave(getRoomAlias().getRoomId());
         });
         getXmppToMxUsers().clear();
+        mx.setUserId(getMasterUserId());
+        mx.room().leave(getRoomAlias().getRoomId());
 
         ExternalComponentWithResource xmpp = getXmppComponent();
         getMxToXmppUsers().values().forEach(nick -> {
             xmpp.setConnectedResource(toJid(nick));
-            getChatRoom().exit();
+            getChatRoom(nick).exit();
         });
         getMxToXmppUsers().clear();
+        xmpp.setConnectedResource(toJid(getMasterNick()));
+        getChatRoom(getMasterNick()).exit();
         try {
             xmpp.close();
         } catch (XmppException e) {
