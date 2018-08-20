@@ -327,7 +327,13 @@ public class Transport implements Closeable {
     }
 
     protected String nickInXmpp(String userId) {
-        return Id.localpart(userId);
+        String nick;
+        synchronized (matrixMonitor) {
+            MatrixClient mx = getMatrixComponent();
+            mx.setUserId(userId);
+            nick = mx.profile().showDisplayName(userId);
+        }
+        return nick;
     }
 
     protected String nickInMatrix(String nick) {
