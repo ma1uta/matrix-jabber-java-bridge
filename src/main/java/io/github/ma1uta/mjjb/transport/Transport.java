@@ -37,8 +37,10 @@ import io.github.ma1uta.matrix.events.RoomAliases;
 import io.github.ma1uta.matrix.events.RoomMember;
 import io.github.ma1uta.matrix.events.RoomMessage;
 import io.github.ma1uta.matrix.events.messages.Text;
+import io.github.ma1uta.mjjb.dao.AppServerUserDao;
 import io.github.ma1uta.mjjb.model.RoomAlias;
 import io.github.ma1uta.mjjb.xmpp.ExternalComponentWithResource;
+import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
@@ -80,7 +82,7 @@ public class Transport implements Closeable {
 
     private String masterNick;
 
-    private PersistenceService service;
+    private Jdbi jdbi;
 
     private BiMap<String, String> mxToXmppUsers = HashBiMap.create();
 
@@ -91,7 +93,7 @@ public class Transport implements Closeable {
     private String prefix;
 
     public Transport(TransportConfiguration configuration, XmppSessionConfiguration xmppSessionConfiguration, Client httpClient,
-                     RoomAlias roomAlias, String masterUserId, PersistenceService service) {
+                     RoomAlias roomAlias, String masterUserId, Jdbi jdbi) {
         this.xmppComponent = ExternalComponentWithResource
             .create(configuration.getXmppComponentName(), configuration.getXmppShareSecret(), xmppSessionConfiguration,
                 configuration.getXmppHostName(), configuration.getXmppPort());
@@ -100,7 +102,7 @@ public class Transport implements Closeable {
         this.roomAlias = roomAlias;
         this.masterUserId = masterUserId;
         this.masterNick = nickInXmpp(masterUserId);
-        this.service = service;
+        this.jdbi = jdbi;
         this.prefix = configuration.getPrefix();
     }
 
@@ -130,8 +132,8 @@ public class Transport implements Closeable {
         return masterUserId;
     }
 
-    public PersistenceService getService() {
-        return service;
+    public Jdbi getJdbi() {
+        return jdbi;
     }
 
     public BiMap<String, String> getMxToXmppUsers() {
@@ -166,7 +168,7 @@ public class Transport implements Closeable {
         MultiUserChatManager chatManager = xmpp.getManager(MultiUserChatManager.class);
 
         Jid masterJid = toJid(getMasterNick());
-        ChatRoom chatRoom = chatManager.createChatRoom(Jid.of(getRoomAlias().getConferenceUrl()));
+        ChatRoom chatRoom = chatManager.createChatRoom(Jid.of(getRoomAlias().getConferenceJid()));
         chatRoom.addOccupantListener(this::xmppOccupant);
         getChatRooms().put(getMasterNick(), chatRoom);
 
@@ -275,9 +277,10 @@ public class Transport implements Closeable {
             String localpart = getPrefix() + displayName;
             String userId;
             synchronized (matrixMonitor) {
-                synchronized (getService()) {
-                    getService().tx(s -> {
-                        if (!s.getUserDao().exist(localpart)) {
+                synchronized (getJdbi()) {
+                    getJdbi().useHandle(handle -> {
+                        AppServerUserDao dao = handle.attach(AppServerUserDao.class);
+                        if (dao.count(localpart) == 0) {
                             try {
                                 RegisterRequest registerRequest = new RegisterRequest();
                                 registerRequest.setUsername(localpart);
@@ -288,8 +291,9 @@ public class Transport implements Closeable {
                             } catch (MatrixException e) {
                                 LOGGER.warn("Failed to register new user.", e);
                             }
-                            s.getUserDao().save(localpart);
+                            dao.save(localpart);
                         }
+
                     });
                     userId = "@" + localpart + ":" + new URL(getMatrixComponent().getHomeserverUrl()).getHost();
                 }
@@ -317,7 +321,7 @@ public class Transport implements Closeable {
                 ExternalComponentWithResource xmpp = getXmppComponent();
 
                 xmpp.setConnectedResource(toJid(nick));
-                ChatRoom chatRoom = xmpp.getManager(MultiUserChatManager.class).createChatRoom(Jid.of(getRoomAlias().getConferenceUrl()));
+                ChatRoom chatRoom = xmpp.getManager(MultiUserChatManager.class).createChatRoom(Jid.of(getRoomAlias().getConferenceJid()));
                 chatRoom.enter(nick).thenAccept(presence -> LOGGER.debug(presence.toString()));
                 getChatRooms().put(nick, chatRoom);
             }

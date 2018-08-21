@@ -18,14 +18,9 @@ package io.github.ma1uta.mjjb.transaction;
 
 import io.github.ma1uta.matrix.appservice.Transaction;
 
-import javax.persistence.Entity;
-import javax.persistence.Table;
-
 /**
  * Transaction info.
  */
-@Entity
-@Table(name = "transaction")
 public class MatrixTransaction extends Transaction {
 
 }

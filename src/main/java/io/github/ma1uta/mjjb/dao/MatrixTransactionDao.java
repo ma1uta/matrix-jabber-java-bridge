@@ -20,26 +20,28 @@ import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
+import java.time.LocalDateTime;
+
 /**
- * DAO for persist and check application service users.
+ * DAO for transactions.
  */
-public interface AppServerUserDao {
+public interface MatrixTransactionDao {
 
     /**
-     * Save new appService User.
+     * Save new transaction.
      *
-     * @param localpart user localpart.
+     * @param id        transaction id.
+     * @param processes timestamp when the transaction was processed.
      */
-    @SqlUpdate("insert into app_user(localpart) values(:localpart)")
-    void save(@Bind("localpart") String localpart);
-
+    @SqlUpdate("insert into transaction(id, processed) values(:id, :processed)")
+    void save(@Bind("id") String id, @Bind("processed") LocalDateTime processes);
 
     /**
-     * Find user by localpart.
+     * Check the specified transaction exists.
      *
-     * @param localpart localpart.
-     * @return user MXID or null.
+     * @param id transaction id.
+     * @return count of the transactions with the specified id.
      */
-    @SqlQuery("select count(*) from app_user where localpart = :localpart")
-    int count(@Bind("localpart") String localpart);
+    @SqlQuery("select count(*) from transaction where id = :id")
+    int exist(@Bind("id") String id);
 }

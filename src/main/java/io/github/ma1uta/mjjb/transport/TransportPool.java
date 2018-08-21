@@ -25,6 +25,7 @@ import io.github.ma1uta.matrix.client.model.room.CreateRoomRequest;
 import io.github.ma1uta.matrix.events.RoomAliases;
 import io.github.ma1uta.mjjb.dao.RoomAliasDao;
 import io.github.ma1uta.mjjb.model.RoomAlias;
+import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.XmppException;
@@ -52,14 +53,14 @@ public class TransportPool implements Managed {
 
     private final Client client;
 
-    private final PersistenceService service;
+    private final Jdbi jdbi;
 
     public TransportPool(XmppSessionConfiguration xmppSessionConfiguration, TransportConfiguration transportConfiguration, Client client,
-                         PersistenceService service) {
+                         Jdbi jdbi) {
         this.xmppSessionConfiguration = xmppSessionConfiguration;
         this.transportConfiguration = transportConfiguration;
         this.client = client;
-        this.service = service;
+        this.jdbi = jdbi;
     }
 
     public Map<String, Transport> getTransports() {
@@ -78,8 +79,8 @@ public class TransportPool implements Managed {
         return client;
     }
 
-    public PersistenceService getService() {
-        return service;
+    public Jdbi getJdbi() {
+        return jdbi;
     }
 
     /**
@@ -134,14 +135,14 @@ public class TransportPool implements Managed {
      */
     public void runTransport(String roomId, String alias) throws XmppException {
         RoomAlias roomAlias;
-        synchronized (getService()) {
-            roomAlias = getService().tx(s -> {
-                RoomAliasDao aliasDao = s.getAliasDao();
-                RoomAlias founded = aliasDao.findByAlias(alias);
+        synchronized (getJdbi()) {
+            roomAlias = getJdbi().withHandle(handle -> {
+                RoomAliasDao dao = handle.attach(RoomAliasDao.class);
+                RoomAlias founded = dao.findByAlias(alias);
                 if (founded == null) {
-                    return aliasDao.persist(alias, roomId);
+                    return dao.save(alias, roomId);
                 } else if (!founded.getRoomId().equals(roomId)) {
-                    return aliasDao.persist(founded);
+                    return dao.save(founded);
                 } else {
                     return founded;
                 }
@@ -160,22 +161,22 @@ public class TransportPool implements Managed {
      */
     public void runTransport(RoomAlias roomAlias) throws XmppException {
         Transport transport = new Transport(getTransportConfiguration(), getXmppSessionConfiguration(), getClient(), roomAlias,
-            getTransportConfiguration().getMasterUserId(), getService());
+            getTransportConfiguration().getMasterUserId(), getJdbi());
         transport.init();
         getTransports().put(transport.getRoomAlias().getRoomId(), transport);
     }
 
     @Override
     public void start() {
-        getService().tx(s -> {
-            s.getAliasDao().findAll().forEach(roomList -> {
-                try {
-                    runTransport(roomList);
-                } catch (XmppException e) {
-                    LOGGER.error("Cannot connect to the conference", e);
-                }
-            });
-        });
+        getJdbi().useHandle(handle -> handle.attach(RoomAliasDao.class).findAll().forEach(roomAlias -> {
+            try {
+                runTransport(roomAlias);
+            } catch (XmppException e) {
+                LOGGER.error("Cannot connect to the conference", e);
+            } catch (MatrixException e) {
+                LOGGER.error("Cannot connect to the homeserver", e);
+            }
+        }));
     }
 
     @Override

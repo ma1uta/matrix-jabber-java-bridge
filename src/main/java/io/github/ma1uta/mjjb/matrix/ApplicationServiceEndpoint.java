@@ -21,9 +21,10 @@ import io.github.ma1uta.matrix.EmptyResponse;
 import io.github.ma1uta.matrix.ErrorResponse;
 import io.github.ma1uta.matrix.application.api.ApplicationApi;
 import io.github.ma1uta.matrix.application.model.TransactionRequest;
+import io.github.ma1uta.mjjb.dao.MatrixTransactionDao;
 import io.github.ma1uta.mjjb.transaction.MatrixTransaction;
-import io.github.ma1uta.mjjb.transport.PersistenceService;
 import io.github.ma1uta.mjjb.transport.TransportPool;
+import org.jdbi.v3.core.Jdbi;
 
 import java.time.LocalDateTime;
 import javax.servlet.http.HttpServletRequest;
@@ -36,32 +37,34 @@ import javax.ws.rs.core.Response;
 public class ApplicationServiceEndpoint implements ApplicationApi {
 
     private final TransportPool pool;
-    private final PersistenceService service;
+    private final Jdbi jdbi;
 
-    public ApplicationServiceEndpoint(TransportPool pool, PersistenceService service) {
+    public ApplicationServiceEndpoint(TransportPool pool, Jdbi jdbi) {
         this.pool = pool;
-        this.service = service;
+        this.jdbi = jdbi;
     }
 
     public TransportPool getPool() {
         return pool;
     }
 
-    public PersistenceService getService() {
-        return service;
+    public Jdbi getJdbi() {
+        return jdbi;
     }
 
     @Override
     public EmptyResponse transaction(String txnId, TransactionRequest request, HttpServletRequest servletRequest,
                                      HttpServletResponse servletResponse) {
-        getService().tx(s -> {
-            if (!s.getTxDao().exist(txnId)) {
+        getJdbi().useHandle(handle -> {
+            MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
+            if (dao.exist(txnId) == 0) {
                 request.getEvents().forEach(event -> getPool().event(event));
 
                 MatrixTransaction transaction = new MatrixTransaction();
                 transaction.setId(txnId);
                 transaction.setProcessed(LocalDateTime.now());
-                s.getTxDao().save(transaction);
+
+                dao.save(txnId, LocalDateTime.now());
             }
         });
         return new EmptyResponse();
@@ -69,9 +72,7 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
 
     @Override
     public EmptyResponse rooms(String roomAlias, HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
-        getService().tx(s -> {
-            getPool().createTransport(roomAlias);
-        });
+        getPool().createTransport(roomAlias);
         return new EmptyResponse();
     }
 

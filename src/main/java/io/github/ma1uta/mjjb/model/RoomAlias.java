@@ -17,31 +17,17 @@
 package io.github.ma1uta.mjjb.model;
 
 import java.util.Objects;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
-import javax.validation.constraints.Size;
 
 /**
  * Stored info about integrated rooms.
  */
-@Entity
-@Table(name = "room_alias")
 public class RoomAlias {
 
-    @Id
-    @Column(length = 4000)
-    @Size(max = 4000)
     private String alias;
 
-    @Column(name = "room_id", length = 1000)
-    @Size(max = 1000)
     private String roomId;
 
-    @Column(name = "conference_url", length = 1000)
-    @Size(max = 1000)
-    private String conferenceUrl;
+    private String conferenceJid;
 
     public String getAlias() {
         return alias;
@@ -59,12 +45,12 @@ public class RoomAlias {
         this.roomId = roomId;
     }
 
-    public String getConferenceUrl() {
-        return conferenceUrl;
+    public String getConferenceJid() {
+        return conferenceJid;
     }
 
-    public void setConferenceUrl(String conferenceUrl) {
-        this.conferenceUrl = conferenceUrl;
+    public void setConferenceJid(String conferenceJid) {
+        this.conferenceJid = conferenceJid;
     }
 
     @Override

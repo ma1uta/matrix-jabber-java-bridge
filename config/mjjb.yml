@@ -6,8 +6,8 @@ xmpp:
 matrix:
   homeserver: 'https://matrix.localhost:8448'
   accessToken: 'as_token'
-  masterUserId: '@xmpp_master:localhost'
-  prefix: 'xmpp_'
+  masterUserId: '@_xmpp_master:localhost'
+  prefix: '_xmpp_'
 
 httpClient:
   gzipEnabled: false
@@ -27,8 +27,8 @@ logging:
       immediateFlush: true
 database:
   driverClass: org.postgresql.Driver
-  user: mxtoot
-  password: mxtoot
+  user: mjjb
+  password: mjjb
   url: jdbc:postgresql://localhost/mjjb
   properties:
     charSet: UTF-8
@@ -69,12 +69,12 @@ id: "mjjb"
 url: "https://app.me:8443"
 as_token: 'as_token'
 hs_token: 'ms_token'
-sender_localpart: 'mjjb'
+sender_localpart: '_xmpp_'
 namespaces:
   users:
     - exclusive: true
-      regex: '@xmpp_*'
+      regex: '@_xmpp_*'
   rooms: []
   aliases:
     - exclusive: false
-      regex: '#xmpp_*'
+      regex: '#_xmpp_*'

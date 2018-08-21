@@ -16,21 +16,21 @@
 
 package io.github.ma1uta.mjjb.dao;
 
-import io.dropwizard.hibernate.AbstractDAO;
-import io.dropwizard.hibernate.UnitOfWork;
 import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.mjjb.model.RoomAlias;
-import org.hibernate.SessionFactory;
+import org.jdbi.v3.sqlobject.config.RegisterBeanMapper;
+import org.jdbi.v3.sqlobject.customizer.Bind;
+import org.jdbi.v3.sqlobject.statement.SqlQuery;
+import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.persistence.NoResultException;
 
 /**
  * DAO for get findAll integrated rooms, save new or delete old one.
  */
-public class RoomAliasDao extends AbstractDAO<RoomAlias> {
+public interface RoomAliasDao {
 
     /**
      * Pattern for the room alias. (#&lt;prefix&gt;_&lt;conference_name&gt;_&lt;xmpp_url&gt;:&lt;homeserver&gt;).
@@ -39,58 +39,80 @@ public class RoomAliasDao extends AbstractDAO<RoomAlias> {
      * For example, the room's alias "#xmpp_myconf_conference.jabber.org:matrix.org" is corresponding to the
      * "myconf@conference.jabber.org" conference.
      */
-    public static final Pattern ROOM_PATTERN = Pattern.compile("([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/]+)");
-
-    private static final int CONFERENCE_INDEX = 2;
-
-    private static final int XMPP_URL_INDEX = 3;
+    Pattern ROOM_PATTERN = Pattern.compile("_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/]+)");
 
     /**
-     * Creates a new DAO with a given session provider.
-     *
-     * @param sessionFactory a session provider
+     * Index of the conference name.
      */
-    public RoomAliasDao(SessionFactory sessionFactory) {
-        super(sessionFactory);
-    }
+    int CONFERENCE_INDEX = 2;
+
+    /**
+     * Index of the xmpp server.
+     */
+    int XMPP_URL_INDEX = 3;
 
     /**
      * Find all integrated rooms.
      *
      * @return all integrated rooms.
      */
-    @UnitOfWork
-    public List<RoomAlias> findAll() {
-        return list(query("SELECT r FROM RoomAlias r"));
-    }
+    @RegisterBeanMapper(RoomAlias.class)
+    @SqlQuery("select room_id, alias, conference_jid from room_alias")
+    List<RoomAlias> findAll();
 
     /**
      * Save a new alias.
      *
-     * @param alias  a new integrated room.
-     * @param roomId the room id.
-     * @return new integrated room.
+     * @param alias         a new integrated room.
+     * @param roomId        the room id.
+     * @param conferenceJid the conference jid.
      */
-    @UnitOfWork
-    public RoomAlias persist(String alias, String roomId) {
+    @SqlUpdate("insert into room_alias(room_id, alias, conference_jid) values(:roomId, :alias, :conferenceJid)")
+    void persist(@Bind("roomId") String roomId, @Bind("alias") String alias, @Bind("conferenceJid") String conferenceJid);
 
+    /**
+     * Save the room alias.
+     *
+     * @param alias  the room alias.
+     * @param roomId the room id.
+     * @return the saved room alias.
+     */
+    default RoomAlias save(String alias, String roomId) {
         String localpart = Id.localpart(alias);
         Matcher matcher = ROOM_PATTERN.matcher(localpart);
         if (!matcher.matches()) {
             throw new IllegalArgumentException(
                 "Wrong room alias. It should be set as #<prefix>_<conference_name>_<xmpp_url>:<matrix_homeserver>");
         }
-
-        RoomAlias roomAlias = new RoomAlias();
-        roomAlias.setAlias(alias);
-        roomAlias.setRoomId(roomId);
-        roomAlias.setConferenceUrl(matcher.group(CONFERENCE_INDEX) + "@" + matcher.group(XMPP_URL_INDEX));
-        return persist(roomAlias);
+        String conferenceJid = matcher.group(CONFERENCE_INDEX) + "@" + matcher.group(XMPP_URL_INDEX);
+        return save(alias, roomId, conferenceJid);
     }
 
-    @Override
-    public RoomAlias persist(RoomAlias roomAlias) {
-        return super.persist(roomAlias);
+    /**
+     * Save the room alias.
+     *
+     * @param alias         the room alias.
+     * @param roomId        the room id.
+     * @param conferenceJid the mapped conference jid.
+     * @return the saved room alias.
+     */
+    default RoomAlias save(String alias, String roomId, String conferenceJid) {
+        persist(roomId, alias, conferenceJid);
+        RoomAlias roomAlias = new RoomAlias();
+        roomAlias.setRoomId(roomId);
+        roomAlias.setAlias(alias);
+        roomAlias.setConferenceJid(conferenceJid);
+        return roomAlias;
+    }
+
+    /**
+     * Save the room alias.
+     *
+     * @param roomAlias the room alias.
+     * @return the saved room alias.
+     */
+    default RoomAlias save(RoomAlias roomAlias) {
+        return save(roomAlias.getRoomId(), roomAlias.getAlias(), roomAlias.getConferenceJid());
     }
 
     /**
@@ -99,11 +121,7 @@ public class RoomAliasDao extends AbstractDAO<RoomAlias> {
      * @param alias alias.
      * @return integrated room or null.
      */
-    public RoomAlias findByAlias(String alias) {
-        try {
-            return uniqueResult(query("SELECT r FROM RoomAlias r WHERE r.alias = :alias").setParameter("alias", alias));
-        } catch (NoResultException e) {
-            return null;
-        }
-    }
+    @RegisterBeanMapper(RoomAlias.class)
+    @SqlQuery("select room_id, alias, conference_jid from room_alias where alias = :alias")
+    RoomAlias findByAlias(@Bind("alias") String alias);
 }

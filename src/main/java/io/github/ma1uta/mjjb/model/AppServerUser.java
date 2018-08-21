@@ -17,22 +17,12 @@
 package io.github.ma1uta.mjjb.model;
 
 import java.util.Objects;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
-import javax.validation.constraints.Size;
 
 /**
  * Application Server Users which are registered on the Homeserver.
  */
-@Entity
-@Table(name = "app_user")
 public class AppServerUser {
 
-    @Id
-    @Column(name = "localpart", length = 400, unique = true)
-    @Size(max = 400)
     private String localpart;
 
     public String getLocalpart() {
