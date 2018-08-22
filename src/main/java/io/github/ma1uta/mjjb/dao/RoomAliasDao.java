@@ -124,4 +124,12 @@ public interface RoomAliasDao {
     @RegisterBeanMapper(RoomAlias.class)
     @SqlQuery("select room_id, alias, conference_jid from room_alias where alias = :alias")
     RoomAlias findByAlias(@Bind("alias") String alias);
+
+    /**
+     * Delete the pupped room.
+     *
+     * @param roomId the room id.
+     */
+    @SqlUpdate("delete from room_alias where room_id = :roomId")
+    void delete(@Bind("roomId") String roomId);
 }

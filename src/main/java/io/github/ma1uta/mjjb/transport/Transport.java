@@ -38,6 +38,7 @@ import io.github.ma1uta.matrix.events.RoomMember;
 import io.github.ma1uta.matrix.events.RoomMessage;
 import io.github.ma1uta.matrix.events.messages.Text;
 import io.github.ma1uta.mjjb.dao.AppServerUserDao;
+import io.github.ma1uta.mjjb.dao.RoomAliasDao;
 import io.github.ma1uta.mjjb.model.RoomAlias;
 import io.github.ma1uta.mjjb.xmpp.ExternalComponentWithResource;
 import org.jdbi.v3.core.Jdbi;
@@ -372,11 +373,14 @@ public class Transport implements Closeable {
             Optional<String> foundAlias = aliases.getAliases().stream().filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
                 .findAny();
             if (!foundAlias.isPresent()) {
-                try {
-                    close();
-                } catch (IOException e) {
-                    LOGGER.error("Cannot close xmpp session.");
-                }
+                getJdbi().useHandle(handle -> {
+                    try {
+                        close();
+                        handle.attach(RoomAliasDao.class).delete(event.getRoomId());
+                    } catch (IOException e) {
+                        LOGGER.error("Cannot close xmpp session.");
+                    }
+                });
             }
         }
     }
