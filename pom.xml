@@ -75,8 +75,8 @@
         </dependency>
         <dependency>
             <groupId>io.github.ma1uta.matrix</groupId>
-            <artifactId>bot-sdk</artifactId>
-            <version>0.1</version>
+            <artifactId>client-sdk</artifactId>
+            <version>0.3</version>
         </dependency>
 
         <dependency>
