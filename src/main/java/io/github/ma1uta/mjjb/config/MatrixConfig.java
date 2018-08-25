@@ -16,8 +16,14 @@
 
 package io.github.ma1uta.mjjb.config;
 
+import io.github.ma1uta.matrix.bot.Command;
+import io.github.ma1uta.matrix.bot.PersistentService;
+import io.github.ma1uta.mjjb.masterbot.MasterBotConfig;
+import io.github.ma1uta.mjjb.masterbot.MasterBotDao;
 import org.hibernate.validator.constraints.NotBlank;
 import org.hibernate.validator.constraints.URL;
+
+import java.util.List;
 
 /**
  * Configuration of the matrix AS.
@@ -36,6 +42,8 @@ public class MatrixConfig {
 
     @NotBlank
     private String prefix;
+
+    private List<Class<? extends Command<MasterBotConfig, MasterBotDao, PersistentService<MasterBotDao>, Void>>> commands;
 
     public String getHomeserver() {
         return homeserver;
@@ -67,5 +75,14 @@ public class MatrixConfig {
 
     public void setPrefix(String prefix) {
         this.prefix = prefix;
+    }
+
+    public List<Class<? extends Command<MasterBotConfig, MasterBotDao, PersistentService<MasterBotDao>, Void>>> getCommands() {
+        return commands;
+    }
+
+    public void setCommands(
+        List<Class<? extends Command<MasterBotConfig, MasterBotDao, PersistentService<MasterBotDao>, Void>>> commands) {
+        this.commands = commands;
     }
 }

@@ -22,8 +22,8 @@ import io.github.ma1uta.matrix.ErrorResponse;
 import io.github.ma1uta.matrix.application.api.ApplicationApi;
 import io.github.ma1uta.matrix.application.model.TransactionRequest;
 import io.github.ma1uta.mjjb.dao.MatrixTransactionDao;
+import io.github.ma1uta.mjjb.masterbot.MasterBot;
 import io.github.ma1uta.mjjb.transaction.MatrixTransaction;
-import io.github.ma1uta.mjjb.transport.TransportPool;
 import org.jdbi.v3.core.Jdbi;
 
 import java.time.LocalDateTime;
@@ -36,29 +36,29 @@ import javax.ws.rs.core.Response;
  */
 public class ApplicationServiceEndpoint implements ApplicationApi {
 
-    private final TransportPool pool;
+    private final MasterBot masterBot;
     private final Jdbi jdbi;
 
-    public ApplicationServiceEndpoint(TransportPool pool, Jdbi jdbi) {
-        this.pool = pool;
+    public ApplicationServiceEndpoint(MasterBot masterBot, Jdbi jdbi) {
+        this.masterBot = masterBot;
         this.jdbi = jdbi;
-    }
-
-    public TransportPool getPool() {
-        return pool;
     }
 
     public Jdbi getJdbi() {
         return jdbi;
     }
 
+    public MasterBot getMasterBot() {
+        return masterBot;
+    }
+
     @Override
     public EmptyResponse transaction(String txnId, TransactionRequest request, HttpServletRequest servletRequest,
                                      HttpServletResponse servletResponse) {
-        getJdbi().useHandle(handle -> {
+        getJdbi().useTransaction(handle -> {
             MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
             if (dao.exist(txnId) == 0) {
-                request.getEvents().forEach(event -> getPool().event(event));
+                request.getEvents().forEach(event -> getMasterBot().send(event));
 
                 MatrixTransaction transaction = new MatrixTransaction();
                 transaction.setId(txnId);
@@ -72,7 +72,7 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
 
     @Override
     public EmptyResponse rooms(String roomAlias, HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
-        getPool().createTransport(roomAlias);
+        getMasterBot().createTransport(roomAlias);
         return new EmptyResponse();
     }
 

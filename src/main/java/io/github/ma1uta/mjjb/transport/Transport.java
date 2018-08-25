@@ -22,18 +22,15 @@ import static io.github.ma1uta.matrix.Event.MembershipState.LEAVE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.OFFLINE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.ONLINE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.UNAVAILABLE;
-import static io.github.ma1uta.mjjb.dao.RoomAliasDao.ROOM_PATTERN;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import io.github.ma1uta.jeon.exception.MatrixException;
 import io.github.ma1uta.matrix.Event;
-import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
 import io.github.ma1uta.matrix.client.model.presence.PresenceStatus;
 import io.github.ma1uta.matrix.events.Presence;
-import io.github.ma1uta.matrix.events.RoomAliases;
 import io.github.ma1uta.matrix.events.RoomMember;
 import io.github.ma1uta.matrix.events.RoomMessage;
 import io.github.ma1uta.matrix.events.messages.Text;
@@ -59,7 +56,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Random;
 import javax.ws.rs.client.Client;
 
 /**
@@ -181,14 +178,15 @@ public class Transport implements Closeable {
         synchronized (xmppMonitor) {
             xmpp.setConnectedResource(masterJid);
             chatRoom.enter(getMasterNick()).thenAccept(presence -> LOGGER.debug(presence.toString()));
-            chatRoom.discoverOccupants().thenAccept(occupants -> occupants.forEach(this::xmppNickEntered));
-        }
-
-        synchronized (matrixMonitor) {
-            MatrixClient mx = getMatrixComponent();
-            mx.setUserId(getMasterUserId());
-            mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
-            mx.event().joinedMembers(getRoomAlias().getRoomId()).getJoined().forEach((userId, roomMember) -> matrixNickEnter(userId));
+            chatRoom.discoverOccupants().thenAccept(occupants -> occupants.forEach(this::xmppNickEntered)).thenAccept(v -> {
+                synchronized (matrixMonitor) {
+                    MatrixClient mx = getMatrixComponent();
+                    mx.setUserId(getMasterUserId());
+                    mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
+                    mx.event().joinedMembers(getRoomAlias().getRoomId()).getJoined()
+                        .forEach((userId, roomMember) -> matrixNickEnter(userId));
+                }
+            });
         }
     }
 
@@ -279,7 +277,7 @@ public class Transport implements Closeable {
             String userId;
             synchronized (matrixMonitor) {
                 synchronized (getJdbi()) {
-                    getJdbi().useHandle(handle -> {
+                    getJdbi().useTransaction(handle -> {
                         AppServerUserDao dao = handle.attach(AppServerUserDao.class);
                         if (dao.count(localpart) == 0) {
                             try {
@@ -338,6 +336,9 @@ public class Transport implements Closeable {
             mx.setUserId(userId);
             nick = mx.profile().showDisplayName(userId);
         }
+        if (getXmppToMxUsers().keySet().contains(nick)) {
+            nick = nick + "#" + new Random().nextInt();
+        }
         return nick;
     }
 
@@ -368,21 +369,21 @@ public class Transport implements Closeable {
             matrixPresence(event, jid);
         } else if (event.getContent() instanceof RoomMember) {
             matrixOccupant(event);
-        } else if (event.getContent() instanceof RoomAliases) {
-            RoomAliases aliases = (RoomAliases) event.getContent();
-            Optional<String> foundAlias = aliases.getAliases().stream().filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
-                .findAny();
-            if (!foundAlias.isPresent()) {
-                getJdbi().useHandle(handle -> {
-                    try {
-                        close();
-                        handle.attach(RoomAliasDao.class).delete(event.getRoomId());
-                    } catch (IOException e) {
-                        LOGGER.error("Cannot close xmpp session.");
-                    }
-                });
-            }
         }
+    }
+
+    /**
+     * Remove this transport.
+     */
+    public void remove() {
+        getJdbi().useTransaction(handle -> {
+            try {
+                close();
+                handle.attach(RoomAliasDao.class).delete(getRoomAlias().getRoomId());
+            } catch (IOException e) {
+                LOGGER.error("Cannot close xmpp session.");
+            }
+        });
     }
 
     protected void matrixMessage(Event event, Jid jid) {

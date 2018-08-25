@@ -106,16 +106,6 @@ public interface RoomAliasDao {
     }
 
     /**
-     * Save the room alias.
-     *
-     * @param roomAlias the room alias.
-     * @return the saved room alias.
-     */
-    default RoomAlias save(RoomAlias roomAlias) {
-        return save(roomAlias.getRoomId(), roomAlias.getAlias(), roomAlias.getConferenceJid());
-    }
-
-    /**
      * Find integrated room by alias.
      *
      * @param alias alias.

@@ -30,12 +30,13 @@ import io.dropwizard.migrations.MigrationsBundle;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.sslreload.SslReloadBundle;
-import io.github.ma1uta.jeon.exception.MatrixException;
-import io.github.ma1uta.matrix.Id;
-import io.github.ma1uta.matrix.client.MatrixClient;
-import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
+import io.github.ma1uta.matrix.bot.BotState;
+import io.github.ma1uta.matrix.bot.PersistentService;
+import io.github.ma1uta.matrix.bot.ReceiptPolicy;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
-import io.github.ma1uta.mjjb.dao.AppServerUserDao;
+import io.github.ma1uta.mjjb.masterbot.MasterBot;
+import io.github.ma1uta.mjjb.masterbot.MasterBotConfig;
+import io.github.ma1uta.mjjb.masterbot.MasterBotDao;
 import io.github.ma1uta.mjjb.matrix.ApplicationServiceEndpoint;
 import io.github.ma1uta.mjjb.transport.TransportConfiguration;
 import io.github.ma1uta.mjjb.transport.TransportPool;
@@ -45,6 +46,8 @@ import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.session.XmppSessionConfiguration;
 import rocks.xmpp.core.session.debug.ConsoleDebugger;
 
+import java.util.Objects;
+import java.util.UUID;
 import javax.ws.rs.client.Client;
 
 /**
@@ -93,11 +96,12 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
         Client client = new JerseyClientBuilder(environment).using(configuration.getHttpClient()).build("httpClient");
         Jdbi jdbi = new JdbiFactory().build(environment, configuration.getDatabase(), "postgresql");
 
-        checkMaster(configuration.getMatrix(), client, jdbi);
+        MasterBot masterBot = checkMaster(configuration.getMatrix(), client, jdbi);
 
         TransportPool pool = new TransportPool(initXmpp(configuration), new TransportConfiguration(configuration), client, jdbi);
+        masterBot.setPool(pool);
 
-        environment.jersey().register(new ApplicationServiceEndpoint(pool, jdbi));
+        environment.jersey().register(new ApplicationServiceEndpoint(masterBot, jdbi));
         environment.lifecycle().manage(pool);
     }
 
@@ -109,23 +113,29 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
         return xmppSessionBuilder.build();
     }
 
-    protected void checkMaster(MatrixConfig config, Client client, Jdbi jdbi) {
-        jdbi.useHandle(handle -> {
-            AppServerUserDao dao = handle.attach(AppServerUserDao.class);
-            if (dao.count(config.getMasterUserId()) == 0) {
-                MatrixClient mxClient = new MatrixClient(config.getHomeserver(), client, false, false);
-                mxClient.setAccessToken(config.getAccessToken());
-                String nick = Id.localpart(config.getMasterUserId());
-                try {
-                    RegisterRequest request = new RegisterRequest();
-                    request.setUsername(nick);
-                    request.setInitialDeviceDisplayName(nick);
-                    mxClient.account().register(request);
-                } catch (MatrixException e) {
-                    LOGGER.warn("master user already registered", e);
-                }
-                dao.save(config.getMasterUserId());
-            }
-        });
+    protected MasterBot checkMaster(MatrixConfig config, Client client, Jdbi jdbi) {
+
+        MasterBotDao botDao = new MasterBotDao(jdbi);
+
+        MasterBotConfig botConfig = botDao.findAll().stream().filter(Objects::nonNull)
+            .filter(c -> config.getMasterUserId().equals(c.getUserId())).findFirst().orElseGet(() -> {
+                MasterBotConfig initConfig = new MasterBotConfig();
+                initConfig.setUserId(config.getMasterUserId());
+                initConfig.setState(BotState.NEW);
+                initConfig.setDeviceId(UUID.randomUUID().toString());
+                initConfig.setReceiptPolicy(ReceiptPolicy.EXECUTED);
+                initConfig.setPrefix("!");
+                initConfig.setAliasPrefix(config.getPrefix());
+                return initConfig;
+            });
+
+        MasterBot bot = new MasterBot(client, config.getHomeserver(), config.getAccessToken(), botConfig, new PersistentService<>(botDao),
+            config.getCommands());
+
+        if (bot.getHolder().getConfig().getState() == BotState.NEW) {
+            bot.newState();
+        }
+
+        return bot;
     }
 }
