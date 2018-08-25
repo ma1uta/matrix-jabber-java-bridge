@@ -8,10 +8,6 @@ matrix:
   accessToken: 'as_token'
   masterUserId: '@_xmpp_master:localhost'
   prefix: '_xmpp_'
-  commands:
-    - io.github.ma1uta.mjjb.masterbot.Connect
-    - io.github.ma1uta.mjjb.masterbot.Disconnect
-    - io.github.ma1uta.mjjb.masterbot.Info
 
 httpClient:
   gzipEnabled: false
