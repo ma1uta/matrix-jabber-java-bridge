@@ -35,7 +35,7 @@ public interface InviterDao {
      * @param roomId the room where the bot was invited.
      * @param userId who invited the bot.
      */
-    @SqlUpdate("insert into inviter(room_id, user_id) values(:roomId, :userId)")
+    @SqlUpdate("insert into inviters(room_id, user_id) values(:roomId, :userId)")
     void save(@Bind("roomId") String roomId, @Bind("userId") String userId);
 
     /**
@@ -43,7 +43,7 @@ public interface InviterDao {
      *
      * @param roomId the room where the bot was invited.
      */
-    @SqlUpdate("delete from inviter where room_id = :roomId")
+    @SqlUpdate("delete from inviters where room_id = :roomId")
     void remove(@Bind("roomId") String roomId);
 
     /**
@@ -53,7 +53,7 @@ public interface InviterDao {
      * @return inviters.
      */
     default Map<String, String> load(Handle handle) {
-        return handle.createQuery("select room_id, user_id from inviter")
+        return handle.createQuery("select room_id, user_id from inviters")
             .map((rs, ctx) -> Pair.of(rs.getString("room_id"), rs.getString("user_id")))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     }

@@ -77,6 +77,8 @@ public class TransportPool implements Managed {
 
     private final Map<String, String> inviters = new HashMap<>();
 
+    private volatile boolean maintenanceMode = false;
+
     public TransportPool(XmppSessionConfiguration xmppSessionConfiguration, TransportConfiguration transportConfiguration, Client client,
                          Jdbi jdbi) {
         this.xmppSessionConfiguration = xmppSessionConfiguration;
@@ -85,6 +87,7 @@ public class TransportPool implements Managed {
         this.jdbi = jdbi;
         this.matrixClient = new MatrixClient(transportConfiguration.getMatrixHomeserver(), client, true, false);
         this.matrixClient.setUserId(transportConfiguration.getMasterUserId());
+        this.matrixClient.setAccessToken(transportConfiguration.getAccessToken());
     }
 
     public Map<String, Transport> getTransports() {
@@ -155,30 +158,40 @@ public class TransportPool implements Managed {
 
     @Override
     public void start() {
-        getJdbi().useTransaction(handle -> {
-            handle.attach(RoomAliasDao.class).findAll().forEach(roomAlias -> {
-                try {
-                    runTransport(roomAlias);
-                } catch (XmppException e) {
-                    LOGGER.error("Cannot connect to the conference", e);
-                } catch (MatrixException e) {
-                    LOGGER.error("Cannot connect to the homeserver", e);
-                }
+        this.maintenanceMode = true;
+        try {
+            getJdbi().useTransaction(handle -> {
+                handle.attach(RoomAliasDao.class).findAll().forEach(roomAlias -> {
+                    try {
+                        runTransport(roomAlias);
+                    } catch (XmppException e) {
+                        LOGGER.error("Cannot connect to the conference", e);
+                    } catch (MatrixException e) {
+                        LOGGER.error("Cannot connect to the homeserver", e);
+                    }
+                });
+                checkMasterBot(handle);
+                loadInviters(handle);
             });
-            checkMasterBot(handle);
-            loadInviters(handle);
-        });
+        } finally {
+            this.maintenanceMode = false;
+        }
     }
 
     @Override
     public void stop() {
-        getTransports().forEach((roomId, transport) -> {
-            try {
-                transport.close();
-            } catch (IOException e) {
-                LOGGER.error("Cannot close xmpp connection", e);
-            }
-        });
+        this.maintenanceMode = true;
+        try {
+            getTransports().forEach((roomId, transport) -> {
+                try {
+                    transport.close();
+                } catch (IOException e) {
+                    LOGGER.error("Cannot close xmpp connection", e);
+                }
+            });
+        } finally {
+            this.maintenanceMode = false;
+        }
     }
 
     /**
@@ -211,14 +224,14 @@ public class TransportPool implements Managed {
         EventContent content = event.getContent();
         if (content instanceof Text) {
             String body = ((Text) content).getBody();
-            if (StringUtils.isNotBlank(body) && body.trim().startsWith(getTransportConfiguration().getMasterUserId())) {
+            if (StringUtils.isNotBlank(body) && body.trim().startsWith(Id.localpart(getTransportConfiguration().getMasterUserId()))) {
                 String[] arguments = body.trim().split("\\s");
                 if (arguments.length < 2) {
                     getMatrixClient().event().sendNotice(event.getRoomId(), "Missing command.");
                     return false;
                 }
 
-                String command = Arrays.stream(arguments).skip(1).collect(Collectors.joining(" "));
+                String command = Arrays.stream(arguments).skip(2).collect(Collectors.joining(" "));
 
                 switch (arguments[1]) {
                     case "connect":
@@ -227,6 +240,8 @@ public class TransportPool implements Managed {
                         return disconnect(event);
                     case "info":
                         return info(event);
+                    case "members":
+                        return members(event);
                     default:
                         return false;
                 }
@@ -242,7 +257,7 @@ public class TransportPool implements Managed {
             return false;
         }
 
-        String alias = String.format("#%s_%s_%s:%s", getTransportConfiguration().getPrefix(), matcher.group(1), matcher.group(2),
+        String alias = String.format("#%s%s_%s:%s", getTransportConfiguration().getPrefix(), matcher.group(1), matcher.group(2),
             Id.domain(getTransportConfiguration().getMasterUserId()));
         RoomId roomId = new RoomId();
         roomId.setRoomId(event.getRoomId());
@@ -275,6 +290,21 @@ public class TransportPool implements Managed {
             sb.append("Matrix room id: ").append(roomAlias.getRoomId()).append("<br>");
             sb.append("Matrix room alias: ").append(roomAlias.getAlias()).append("<br>");
             sb.append("Xmpp conference: ").append(roomAlias.getConferenceJid()).append("<br>");
+
+            String formatted = sb.toString();
+            getMatrixClient().event().sendFormattedNotice(event.getRoomId(), Jsoup.parse(formatted).text(), formatted);
+            return true;
+        }
+
+        return false;
+    }
+
+    protected boolean members(Event event) {
+        Transport transport = getTransports().get(event.getRoomId());
+
+        if (transport != null) {
+            StringBuilder sb = new StringBuilder();
+
             sb.append("Pupped users:<br>Matrix users:<br>");
             transport.getMxToXmppUsers().forEach((userId, nick) -> sb.append(userId).append(" -> ").append(nick).append("<br>"));
             sb.append("Xmpp users:<br>");
@@ -301,10 +331,14 @@ public class TransportPool implements Managed {
                 LOGGER.error(String.format("Cannot create transport in the room %s with conference %s", event.getRoomId(), alias), e);
             }
         } else {
-            Transport transportToRemove = getTransports().remove(event.getRoomId());
-            if (transportToRemove != null) {
-                transportToRemove.remove();
-                return true;
+            Optional<String> joinedRoom = getMatrixClient().room().joinedRooms().stream().filter(roomId -> roomId.equals(event.getRoomId()))
+                .findAny();
+            if (!joinedRoom.isPresent()) {
+                Transport transportToRemove = getTransports().remove(event.getRoomId());
+                if (transportToRemove != null) {
+                    transportToRemove.remove();
+                    return true;
+                }
             }
         }
         return false;
@@ -313,7 +347,7 @@ public class TransportPool implements Managed {
     protected boolean joinOrLeave(Event event) {
         RoomMember content = (RoomMember) event.getContent();
 
-        if (!getTransportConfiguration().getMasterUserId().equals(event.getStateKey())) {
+        if (!getTransportConfiguration().getMasterUserId().equals(event.getStateKey()) || this.maintenanceMode) {
             return false;
         }
 
@@ -325,7 +359,10 @@ public class TransportPool implements Managed {
             case Event.MembershipState.BAN:
             case Event.MembershipState.LEAVE:
                 removeInviter(event.getRoomId());
-                getTransports().remove(event.getRoomId()).remove();
+                Transport transport = getTransports().remove(event.getRoomId());
+                if (transport != null) {
+                    transport.remove();
+                }
                 return true;
             default:
                 return false;
@@ -353,8 +390,8 @@ public class TransportPool implements Managed {
     protected void checkMasterBot(Handle handle) {
         String masterUserId = getTransportConfiguration().getMasterUserId();
         AppServerUserDao dao = handle.attach(AppServerUserDao.class);
-        if (dao.count(masterUserId) == 0) {
-            String nick = Id.localpart(masterUserId);
+        String nick = Id.localpart(masterUserId);
+        if (dao.count(nick) == 0) {
             try {
                 RegisterRequest request = new RegisterRequest();
                 request.setUsername(nick);
@@ -363,7 +400,7 @@ public class TransportPool implements Managed {
             } catch (MatrixException e) {
                 LOGGER.warn("master user already registered", e);
             }
-            dao.save(masterUserId);
+            dao.save(nick);
         }
     }
 

@@ -57,7 +57,7 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
         getJdbi().useTransaction(handle -> {
             MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
             if (dao.exist(txnId) == 0) {
-                request.getEvents().forEach(event -> getPool().event(event));
+                request.getEvents().parallelStream().forEach(event -> getPool().event(event));
                 dao.save(txnId, LocalDateTime.now());
             }
         });

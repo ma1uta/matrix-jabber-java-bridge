@@ -16,5 +16,5 @@ CREATE TABLE "room_alias" (
 CREATE TABLE "inviters" (
   "room_id" VARCHAR(255) NOT NULL,
   "user_id" VARCHAR(255) NOT NULL,
-  PRIMARY KEY ("room_id"),
+  PRIMARY KEY ("room_id")
 );

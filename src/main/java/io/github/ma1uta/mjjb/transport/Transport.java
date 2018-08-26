@@ -168,17 +168,19 @@ public class Transport implements Closeable {
         Jid masterJid = toJid(getMasterNick());
         ChatRoom chatRoom = chatManager.createChatRoom(Jid.of(getRoomAlias().getConferenceJid()));
         chatRoom.addOccupantListener(this::xmppOccupant);
+        chatRoom.addInboundMessageListener(this::xmppMessage);
         getChatRooms().put(getMasterNick(), chatRoom);
 
-        xmpp.addInboundPresenceListener(this::xmppPresence);
-        xmpp.addInboundMessageListener(this::xmppMessage);
+        //xmpp.addInboundPresenceListener(this::xmppPresence);
+        //xmpp.addInboundMessageListener(this::xmppMessage);
 
         xmpp.connect();
 
         synchronized (xmppMonitor) {
             xmpp.setConnectedResource(masterJid);
             chatRoom.enter(getMasterNick()).thenAccept(presence -> LOGGER.debug(presence.toString()));
-            chatRoom.discoverOccupants().thenAccept(occupants -> occupants.forEach(this::xmppNickEntered)).thenAccept(v -> {
+            chatRoom.discoverOccupants().thenAccept(occupants -> {
+                occupants.forEach(this::xmppNickEntered);
                 synchronized (matrixMonitor) {
                     MatrixClient mx = getMatrixComponent();
                     mx.setUserId(getMasterUserId());
@@ -378,6 +380,7 @@ public class Transport implements Closeable {
     public void remove() {
         getJdbi().useTransaction(handle -> {
             try {
+                getMatrixComponent().room().delete(getRoomAlias().getAlias());
                 close();
                 handle.attach(RoomAliasDao.class).delete(getRoomAlias().getRoomId());
             } catch (IOException e) {
