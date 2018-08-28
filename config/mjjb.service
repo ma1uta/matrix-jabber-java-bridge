@@ -1,0 +1,17 @@
+[Unit]
+Description=Matrix <-> Xmpp bridge
+Documentation=https://github.com/ma1uta/matrix-jabber-java-bridge
+After=network.target postgresql.service
+AssertPathExists=/home/mjjb
+
+[Service]
+User=mjjb
+WorkingDirectory=/home/mjjb
+ExecStart=/usr/bin/java -Xmx300m -jar mjjb.jar server mjjb.yml
+Restart=on-failure
+SuccessExitStatus=143
+ProtectSystem=strict
+ReadWritePaths=/home/mjjb
+
+[Install]
+WantedBy=multi-user.target
