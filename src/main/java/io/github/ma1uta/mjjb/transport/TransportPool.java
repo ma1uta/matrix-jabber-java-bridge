@@ -43,8 +43,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.session.XmppSessionConfiguration;
+import rocks.xmpp.core.stanza.MessageEvent;
+import rocks.xmpp.core.stanza.PresenceEvent;
+import rocks.xmpp.extensions.component.accept.ExternalComponent;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,7 +57,7 @@ import java.util.stream.Collectors;
 import javax.ws.rs.client.Client;
 
 /**
- * Pool of the findAll transports.
+ * Pool of the findAll mxTransports.
  */
 public class TransportPool implements Managed {
 
@@ -63,7 +65,9 @@ public class TransportPool implements Managed {
 
     private static final Pattern CONFERENCE = Pattern.compile("(.*)@(.*)");
 
-    private Map<String, Transport> transports = new HashMap<>();
+    private Map<String, Transport> mxTransports = new HashMap<>();
+
+    private Map<String, Transport> xmppTransports = new HashMap<>();
 
     private final XmppSessionConfiguration xmppSessionConfiguration;
 
@@ -73,7 +77,9 @@ public class TransportPool implements Managed {
 
     private final Jdbi jdbi;
 
-    private final MatrixClient matrixClient;
+    private MatrixClient matrixClient;
+
+    private ExternalComponent xmppClient;
 
     private final Map<String, String> inviters = new HashMap<>();
 
@@ -85,13 +91,14 @@ public class TransportPool implements Managed {
         this.transportConfiguration = transportConfiguration;
         this.client = client;
         this.jdbi = jdbi;
-        this.matrixClient = new MatrixClient(transportConfiguration.getMatrixHomeserver(), client, true, false);
-        this.matrixClient.setUserId(transportConfiguration.getMasterUserId());
-        this.matrixClient.setAccessToken(transportConfiguration.getAccessToken());
     }
 
-    public Map<String, Transport> getTransports() {
-        return transports;
+    public Map<String, Transport> getMxTransports() {
+        return mxTransports;
+    }
+
+    public Map<String, Transport> getXmppTransports() {
+        return xmppTransports;
     }
 
     public XmppSessionConfiguration getXmppSessionConfiguration() {
@@ -110,6 +117,10 @@ public class TransportPool implements Managed {
         return matrixClient;
     }
 
+    public ExternalComponent getXmppClient() {
+        return xmppClient;
+    }
+
     public Jdbi getJdbi() {
         return jdbi;
     }
@@ -123,9 +134,8 @@ public class TransportPool implements Managed {
      *
      * @param roomId room id.
      * @param alias  room alias.
-     * @throws XmppException when cannot connect to the xmpp conference.
      */
-    public void runTransport(String roomId, String alias) throws XmppException {
+    public void runTransport(String roomId, String alias) {
         RoomAlias roomAlias;
         synchronized (getJdbi()) {
             roomAlias = getJdbi().inTransaction(handle -> {
@@ -147,13 +157,12 @@ public class TransportPool implements Managed {
      * Start transport.
      *
      * @param roomAlias room alias of the new integrated room.
-     * @throws XmppException when cannot connect to the xmpp conference.
      */
-    public void runTransport(RoomAlias roomAlias) throws XmppException {
-        Transport transport = new Transport(getTransportConfiguration(), getXmppSessionConfiguration(), getClient(), roomAlias,
-            getTransportConfiguration().getMasterUserId(), getJdbi());
+    public void runTransport(RoomAlias roomAlias) {
+        Transport transport = new Transport(getTransportConfiguration(), getXmppClient(), getClient(), roomAlias, getJdbi());
         transport.init();
-        getTransports().put(transport.getRoomAlias().getRoomId(), transport);
+        getMxTransports().put(transport.getRoomAlias().getRoomId(), transport);
+        getXmppTransports().put(transport.getRoomAlias().getConferenceJid(), transport);
     }
 
     @Override
@@ -161,17 +170,17 @@ public class TransportPool implements Managed {
         this.maintenanceMode = true;
         try {
             getJdbi().useTransaction(handle -> {
+                createMatrixClient();
+                checkMasterBot(handle);
+                loadInviters(handle);
+                connectToXmpp();
                 handle.attach(RoomAliasDao.class).findAll().forEach(roomAlias -> {
                     try {
                         runTransport(roomAlias);
-                    } catch (XmppException e) {
-                        LOGGER.error("Cannot connect to the conference", e);
                     } catch (MatrixException e) {
                         LOGGER.error("Cannot connect to the homeserver", e);
                     }
                 });
-                checkMasterBot(handle);
-                loadInviters(handle);
             });
         } finally {
             this.maintenanceMode = false;
@@ -182,13 +191,10 @@ public class TransportPool implements Managed {
     public void stop() {
         this.maintenanceMode = true;
         try {
-            getTransports().forEach((roomId, transport) -> {
-                try {
-                    transport.close();
-                } catch (IOException e) {
-                    LOGGER.error("Cannot close xmpp connection", e);
-                }
-            });
+            getMxTransports().values().forEach(Transport::close);
+            getXmppClient().close();
+        } catch (XmppException e) {
+            LOGGER.error("Cannot close the xmpp connection", e);
         } finally {
             this.maintenanceMode = false;
         }
@@ -211,7 +217,7 @@ public class TransportPool implements Managed {
         }
 
         if (!commandInvoked) {
-            Transport transport = getTransports().get(event.getRoomId());
+            Transport transport = getMxTransports().get(event.getRoomId());
             if (transport != null) {
                 transport.event(event);
             } else {
@@ -261,7 +267,11 @@ public class TransportPool implements Managed {
             Id.domain(getTransportConfiguration().getMasterUserId()));
         RoomId roomId = new RoomId();
         roomId.setRoomId(event.getRoomId());
-        getMatrixClient().room().newAlias(roomId, alias);
+        try {
+            getMatrixClient().room().newAlias(roomId, alias);
+        } catch (MatrixException e) {
+            LOGGER.error("Cannot set a new alias", e);
+        }
         return true;
     }
 
@@ -271,7 +281,7 @@ public class TransportPool implements Managed {
             return false;
         }
 
-        Transport transport = getTransports().remove(event.getRoomId());
+        Transport transport = getMxTransports().remove(event.getRoomId());
         if (transport != null) {
             transport.remove();
             removeInviter(event.getRoomId());
@@ -281,7 +291,7 @@ public class TransportPool implements Managed {
     }
 
     protected boolean info(Event event) {
-        Transport transport = getTransports().get(event.getRoomId());
+        Transport transport = getMxTransports().get(event.getRoomId());
 
         if (transport != null) {
             StringBuilder sb = new StringBuilder();
@@ -300,7 +310,7 @@ public class TransportPool implements Managed {
     }
 
     protected boolean members(Event event) {
-        Transport transport = getTransports().get(event.getRoomId());
+        Transport transport = getMxTransports().get(event.getRoomId());
 
         if (transport != null) {
             StringBuilder sb = new StringBuilder();
@@ -323,18 +333,13 @@ public class TransportPool implements Managed {
             .filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
             .findAny();
         if (foundAlias.isPresent()) {
-            String alias = foundAlias.get();
-            try {
-                runTransport(event.getRoomId(), alias);
-                return true;
-            } catch (XmppException e) {
-                LOGGER.error(String.format("Cannot create transport in the room %s with conference %s", event.getRoomId(), alias), e);
-            }
+            runTransport(event.getRoomId(), foundAlias.get());
+            return true;
         } else {
             Optional<String> joinedRoom = getMatrixClient().room().joinedRooms().stream().filter(roomId -> roomId.equals(event.getRoomId()))
                 .findAny();
             if (!joinedRoom.isPresent()) {
-                Transport transportToRemove = getTransports().remove(event.getRoomId());
+                Transport transportToRemove = getMxTransports().remove(event.getRoomId());
                 if (transportToRemove != null) {
                     transportToRemove.remove();
                     return true;
@@ -358,8 +363,12 @@ public class TransportPool implements Managed {
                 return true;
             case Event.MembershipState.BAN:
             case Event.MembershipState.LEAVE:
+                if (getMatrixClient().room().joinedRooms().contains(event.getRoomId())) {
+                    return false;
+                }
+
                 removeInviter(event.getRoomId());
-                Transport transport = getTransports().remove(event.getRoomId());
+                Transport transport = getMxTransports().remove(event.getRoomId());
                 if (transport != null) {
                     transport.remove();
                 }
@@ -420,5 +429,47 @@ public class TransportPool implements Managed {
             handle.attach(InviterDao.class).remove(roomId);
             getInviters().remove(roomId);
         });
+    }
+
+    protected void createMatrixClient() {
+        TransportConfiguration config = getTransportConfiguration();
+        this.matrixClient = new MatrixClient(config.getMatrixHomeserver(), getClient(), true, false);
+        this.matrixClient.setUserId(config.getMasterUserId());
+        this.matrixClient.setAccessToken(config.getAccessToken());
+    }
+
+    protected void connectToXmpp() {
+        TransportConfiguration config = getTransportConfiguration();
+        this.xmppClient = ExternalComponent.create(
+            config.getXmppComponentName(),
+            config.getXmppShareSecret(),
+            getXmppSessionConfiguration(),
+            config.getXmppHostName(),
+            config.getXmppPort()
+        );
+        this.xmppClient.addInboundMessageListener(this::xmppMessage);
+        this.xmppClient.addInboundPresenceListener(this::xmppPresence);
+
+        try {
+            this.xmppClient.connect();
+        } catch (XmppException e) {
+            LOGGER.error("Cannot connect to the server", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    protected void xmppMessage(MessageEvent messageEvent) {
+        Transport transport = getXmppTransports().get(messageEvent.getMessage().getFrom().asBareJid().toEscapedString());
+        if (transport != null) {
+            transport.xmppMessage(messageEvent);
+        }
+    }
+
+    protected void xmppPresence(PresenceEvent presenceEvent) {
+        Transport transport = getXmppTransports().get(presenceEvent.getPresence().getFrom().asBareJid().toEscapedString());
+        if (transport != null) {
+            transport.xmppPresence(presenceEvent);
+        }
     }
 }
