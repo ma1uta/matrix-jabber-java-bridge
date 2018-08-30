@@ -5,7 +5,8 @@ xmpp:
   port: 5223
 matrix:
   homeserver: 'https://matrix.localhost:8448'
-  accessToken: 'as_token'
+  asToken: 'as_token'
+  hsToken: 'ms_token'
   masterUserId: '@_xmpp_master:localhost'
   prefix: '_xmpp_'
 
@@ -32,8 +33,6 @@ database:
   url: jdbc:postgresql://localhost/mjjb
   properties:
     charSet: UTF-8
-    hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
-    hibernate.hbm2ddl.auto: "update"
   maxWaitForConnection: 1s
   validationQuery: "/* MyApplication Health Check */ SELECT 1"
   minSize: 8
@@ -61,20 +60,3 @@ server:
   requestLog:
     appenders:
       - type: console
-
-
-
-### Registration part ###
-id: "mjjb"
-url: "https://app.me:8443"
-as_token: 'as_token'
-hs_token: 'ms_token'
-sender_localpart: '_xmpp_'
-namespaces:
-  users:
-    - exclusive: true
-      regex: '@_xmpp_*'
-  rooms: []
-  aliases:
-    - exclusive: false
-      regex: '#_xmpp_*'

@@ -1,0 +1,14 @@
+### Registration part ###
+id: "mjjb"
+url: "https://app.me:8443"
+as_token: 'as_token'
+hs_token: 'ms_token'
+sender_localpart: '_xmpp_master'
+namespaces:
+  users:
+    - exclusive: true
+      regex: '@_xmpp_*'
+  rooms: []
+  aliases:
+    - exclusive: false
+      regex: '#_xmpp_*'
