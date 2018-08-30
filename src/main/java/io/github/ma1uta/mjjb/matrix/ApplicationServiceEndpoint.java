@@ -23,6 +23,7 @@ import io.github.ma1uta.matrix.application.api.ApplicationApi;
 import io.github.ma1uta.matrix.application.model.TransactionRequest;
 import io.github.ma1uta.mjjb.dao.MatrixTransactionDao;
 import io.github.ma1uta.mjjb.transport.TransportPool;
+import org.apache.commons.lang3.StringUtils;
 import org.jdbi.v3.core.Jdbi;
 
 import java.time.LocalDateTime;
@@ -37,10 +38,12 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
 
     private final TransportPool pool;
     private final Jdbi jdbi;
+    private final String hsToken;
 
-    public ApplicationServiceEndpoint(TransportPool pool, Jdbi jdbi) {
+    public ApplicationServiceEndpoint(TransportPool pool, Jdbi jdbi, String hsToken) {
         this.pool = pool;
         this.jdbi = jdbi;
+        this.hsToken = hsToken;
     }
 
     public Jdbi getJdbi() {
@@ -51,9 +54,14 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
         return pool;
     }
 
+    public String getHsToken() {
+        return hsToken;
+    }
+
     @Override
     public EmptyResponse transaction(String txnId, TransactionRequest request, HttpServletRequest servletRequest,
                                      HttpServletResponse servletResponse) {
+        validateAsToken(servletRequest);
         getJdbi().useTransaction(handle -> {
             MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
             if (dao.exist(txnId) == 0) {
@@ -66,12 +74,25 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
 
     @Override
     public EmptyResponse rooms(String roomAlias, HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
+        validateAsToken(servletRequest);
         getPool().createTransport(roomAlias);
         return new EmptyResponse();
     }
 
     @Override
     public EmptyResponse users(String userId, HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
+        validateAsToken(servletRequest);
         throw new MatrixException(ErrorResponse.Code.M_FORBIDDEN, "Not supported.", Response.Status.FORBIDDEN.getStatusCode());
+    }
+
+    protected void validateAsToken(HttpServletRequest servletRequest) {
+        String accessToken = servletRequest.getParameter("access_token");
+        if (StringUtils.isBlank(accessToken)) {
+            throw new MatrixException("_UNAUTHORIZED", "", HttpServletResponse.SC_UNAUTHORIZED);
+        }
+
+        if (!getHsToken().equals(accessToken)) {
+            throw new MatrixException(ErrorResponse.Code.M_FORBIDDEN, "", HttpServletResponse.SC_FORBIDDEN);
+        }
     }
 }

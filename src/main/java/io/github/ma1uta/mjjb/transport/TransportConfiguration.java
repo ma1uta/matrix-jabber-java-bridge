@@ -53,7 +53,7 @@ public class TransportConfiguration {
         this.xmppPort = config.getXmpp().getPort();
 
         this.matrixHomeserver = Objects.requireNonNull(config.getMatrix().getHomeserver());
-        this.accessToken = Objects.requireNonNull(config.getMatrix().getAccessToken());
+        this.accessToken = Objects.requireNonNull(config.getMatrix().getAsToken());
         this.masterUserId = Objects.requireNonNull(config.getMatrix().getMasterUserId());
         this.prefix = Objects.requireNonNull(config.getMatrix().getPrefix());
     }

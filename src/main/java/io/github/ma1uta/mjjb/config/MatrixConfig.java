@@ -29,7 +29,10 @@ public class MatrixConfig {
     private String homeserver;
 
     @NotBlank
-    private String accessToken;
+    private String asToken;
+
+    @NotBlank
+    private String hsToken;
 
     @NotBlank
     private String masterUserId;
@@ -45,12 +48,20 @@ public class MatrixConfig {
         this.homeserver = homeserver;
     }
 
-    public String getAccessToken() {
-        return accessToken;
+    public String getAsToken() {
+        return asToken;
     }
 
-    public void setAccessToken(String accessToken) {
-        this.accessToken = accessToken;
+    public void setAsToken(String asToken) {
+        this.asToken = asToken;
+    }
+
+    public String getHsToken() {
+        return hsToken;
+    }
+
+    public void setHsToken(String hsToken) {
+        this.hsToken = hsToken;
     }
 
     public String getMasterUserId() {

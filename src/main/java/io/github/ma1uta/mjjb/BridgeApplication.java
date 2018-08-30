@@ -89,7 +89,7 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
 
         TransportPool pool = new TransportPool(initXmpp(configuration), new TransportConfiguration(configuration), client, jdbi);
 
-        environment.jersey().register(new ApplicationServiceEndpoint(pool, jdbi));
+        environment.jersey().register(new ApplicationServiceEndpoint(pool, jdbi, configuration.getMatrix().getHsToken()));
         environment.lifecycle().manage(pool);
     }
 
