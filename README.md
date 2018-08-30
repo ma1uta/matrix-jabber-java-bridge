@@ -120,7 +120,7 @@ to the any place where the Matrix homeserver can find it.
           keyStorePath: /home/mjjb/mjjb.pkcs12 # path to the certificates
           keyStorePassword: secretCertPassword # password of the key store.
     ```
-14. If you use this [file](https://github.com/ma1uta/matrix-jabber-java-bridge/blob/master/config/mjjb.service)
+14. You can use this [file](https://github.com/ma1uta/matrix-jabber-java-bridge/blob/master/config/mjjb.service)
     for creating the systemd service.
 15. Check the configuration:
     ```
