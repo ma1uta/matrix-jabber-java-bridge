@@ -66,6 +66,7 @@ to the any place where the Matrix homeserver can find it.
     - url - the `url` where the bridge will be deployed.
     - as_token - the token to authorize the bridge on the matrix homeserver.
     - hs_token - the token to authorize the matrix homeserver on the bridge.
+    The `as_token` and `hs_token` are used only by this bridge (they are not a `registration_shared_secret`) and you need to generate them.
 9. Add SRV DNS record of the bridge xmpp domain. For example, add the following SRV record:
     `_xmpp-server._tcp.mjjb.xmppserver.tld TTL IN SRV 10 10 5269 xmppserver.tld`
 10. Register the bridge on the xmpp server. For example for the ejabberd the registration section will look:
@@ -78,6 +79,7 @@ to the any place where the Matrix homeserver can find it.
           "mjjb.xmpp.server.tld":
             password: "secret_xmpp_password"
     ```
+    The password should be generate a new one.
 11. Register the bridge on the matrix homeserver. Add the registration file in the homeserver.yml:
     ```
     app_service_config_files:
@@ -93,9 +95,10 @@ to the any place where the Matrix homeserver can find it.
     matrix:
       homeserver: 'https://matrix.homeserver.tld:8448'
       asToken: 'as_token'
-      hsToken: 'ms_token'
+      hsToken: 'hs_token'
       masterUserId: '@_xmpp_master:localhost'
     ```
+    `asToken` and `hsToken` are taken from point 8.
     Specify the database url, username and password:
     ```
     database:
