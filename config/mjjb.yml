@@ -17,6 +17,8 @@ httpClient:
   timeout: 20s
 logging:
   level: ERROR
+  loggers:
+    "io.github.ma1uta": INFO
   appenders:
     - type: console
       target: stderr
