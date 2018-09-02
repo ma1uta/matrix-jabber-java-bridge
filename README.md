@@ -165,7 +165,12 @@ the conference bridge@conference.jabber.org the alias will be look as `#_xmpp_br
 But users can add room aliases only from they domain. Therefore users can invite the master bot and tell him
 to add this alias to the current room.
 
-### Master bot commands:
+### Master bot commands
+
+All commands have the form: `<master bot's name>: <command> [<arguments>]`.
+
+For example: `_xmpp_master: connect test@conference.jabber.org` or `_xmpp_master: info`.
+
 - `connect <conference url>` - connect current room with the conference specified in `<conference url>`.
 - `disconnect` - destroy the bridge.
 - `info` - show summary of the bridge (room id, room alias, conference url).
