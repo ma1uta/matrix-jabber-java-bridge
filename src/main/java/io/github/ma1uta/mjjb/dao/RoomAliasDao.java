@@ -39,7 +39,7 @@ public interface RoomAliasDao {
      * For example, the room's alias "#xmpp_myconf_conference.jabber.org:matrix.org" is corresponding to the
      * "myconf@conference.jabber.org" conference.
      */
-    Pattern ROOM_PATTERN = Pattern.compile("_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/]+)");
+    Pattern ROOM_PATTERN = Pattern.compile("_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/_]+)_([a-zA-Z0-9.=\\-/]+)");
 
     /**
      * Index of the conference name.
