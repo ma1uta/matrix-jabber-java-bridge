@@ -35,7 +35,7 @@ public interface InviterDao {
      * @param roomId the room where the bot was invited.
      * @param userId who invited the bot.
      */
-    @SqlUpdate("insert into inviters(room_id, user_id) values(:roomId, :userId)")
+    @SqlUpdate("insert into inviters(room_id, user_id) values(:roomId, :userId) on conflict do nothing")
     void save(@Bind("roomId") String roomId, @Bind("userId") String userId);
 
     /**

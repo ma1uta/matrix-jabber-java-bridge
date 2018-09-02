@@ -217,6 +217,7 @@ public class Transport implements Closeable {
             case BANNED:
             case EXITED:
             case KICKED:
+                LOGGER.debug("Leave member");
                 String mxUser = getXmppToMxUsers().get(nick);
                 if (mxUser == null || getMasterNick().equals(nick)) {
                     return;
@@ -343,11 +344,23 @@ public class Transport implements Closeable {
     public void event(Event event) {
         String sender = event.getSender();
         String nick = getMxToXmppUsers().get(sender);
-        if (getMasterUserId().equals(sender) || (nick == null && !(event.getContent() instanceof RoomMember))) {
+        if (getMasterUserId().equals(sender)) {
+            LOGGER.debug("Event sent by master bot, skip");
+            return;
+        }
+        if (nick == null && !(event.getContent() instanceof RoomMember)) {
+            if (LOGGER.isWarnEnabled()) {
+                if (getXmppToMxUsers().inverse().get(sender) != null) {
+                    LOGGER.debug("Event sent by puppet user, skip");
+                } else {
+                    LOGGER.warn("Cannot found the puppet user: {}", sender);
+                }
+            }
             return;
         }
 
         Jid jid = toJid(nick);
+        LOGGER.debug("Jid: {}", jid);
         if (event.getContent() instanceof RoomMessage) {
             matrixMessage(event, jid);
         } else if (event.getContent() instanceof Presence) {
@@ -362,13 +375,27 @@ public class Transport implements Closeable {
      */
     public void remove() {
         getJdbi().useTransaction(handle -> {
-            getMatrixComponent().room().delete(getRoomAlias().getAlias());
-            close();
+            MatrixClient matrixClient = getMatrixComponent();
+
+            synchronized (matrixMonitor) {
+                close();
+
+                matrixClient.setUserId(getMasterUserId());
+                try {
+                    matrixClient.room().delete(getRoomAlias().getAlias());
+                } catch (MatrixException e) {
+                    LOGGER.error("Cannot delete the alias", e);
+                }
+                if (matrixClient.room().joinedRooms().contains(getRoomAlias().getRoomId())) {
+                    matrixClient.room().leave(getRoomAlias().getRoomId());
+                }
+            }
             handle.attach(RoomAliasDao.class).delete(getRoomAlias().getRoomId());
         });
     }
 
     protected void matrixMessage(Event event, Jid jid) {
+        LOGGER.debug("m.room.message");
         Text text = (Text) event.getContent();
         Message message = new Message(null, null, text.getBody());
         message.setFrom(jid);
@@ -380,12 +407,19 @@ public class Transport implements Closeable {
         String stateKey = event.getStateKey();
         switch (member.getMembership()) {
             case JOIN:
+                LOGGER.debug("Join new member");
                 matrixNickEnter(stateKey);
                 break;
             case LEAVE:
             case BAN:
+                LOGGER.debug("Leave member");
                 String nick = getMxToXmppUsers().get(stateKey);
-                if (nick == null || getMasterUserId().equals(stateKey)) {
+                if (getMasterUserId().equals(stateKey)) {
+                    LOGGER.debug("Master bot, skip");
+                    return;
+                }
+                if (nick == null) {
+                    LOGGER.warn("Not found the puppet user: {}", stateKey);
                     return;
                 }
 
@@ -398,16 +432,20 @@ public class Transport implements Closeable {
     }
 
     protected void matrixPresence(Event event, Jid jid) {
+        LOGGER.debug("m.presence");
         Presence presence = (Presence) event.getContent();
         rocks.xmpp.core.stanza.model.Presence xmppPresence = new rocks.xmpp.core.stanza.model.Presence();
         xmppPresence.setFrom(jid);
         switch (presence.getPresence()) {
             case ONLINE:
+                LOGGER.debug("online: slip");
                 break;
             case OFFLINE:
+                LOGGER.debug("offline");
                 xmppPresence.setShow(rocks.xmpp.core.stanza.model.Presence.Show.AWAY);
                 break;
             case UNAVAILABLE:
+                LOGGER.debug("unavailable");
                 xmppPresence.setType(rocks.xmpp.core.stanza.model.Presence.Type.UNAVAILABLE);
                 xmppPresence.setShow(rocks.xmpp.core.stanza.model.Presence.Show.DND);
                 break;
@@ -420,7 +458,6 @@ public class Transport implements Closeable {
     @Override
     public void close() {
         MatrixClient mx = getMatrixComponent();
-        mx.setUserId(getMasterUserId());
         getXmppToMxUsers().values().forEach(userId -> {
             mx.setUserId(userId);
             mx.room().leave(getRoomAlias().getRoomId());

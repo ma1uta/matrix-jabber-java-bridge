@@ -49,6 +49,7 @@ import rocks.xmpp.extensions.component.accept.ExternalComponent;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -142,13 +143,16 @@ public class TransportPool implements Managed {
                 RoomAliasDao dao = handle.attach(RoomAliasDao.class);
                 RoomAlias founded = dao.findByAlias(alias);
                 if (founded == null || !founded.getRoomId().equals(roomId)) {
+                    LOGGER.debug("Save a new transport");
                     return dao.save(alias, roomId);
                 } else {
+                    LOGGER.debug("Transport already saved");
                     return founded;
                 }
             });
         }
         if (roomAlias != null) {
+            LOGGER.debug("Run transport");
             runTransport(roomAlias);
         }
     }
@@ -161,6 +165,7 @@ public class TransportPool implements Managed {
     public void runTransport(RoomAlias roomAlias) {
         Transport transport = new Transport(getTransportConfiguration(), getXmppClient(), getClient(), roomAlias, getJdbi());
         transport.init();
+        LOGGER.info("Init the transport");
         getMxTransports().put(transport.getRoomAlias().getRoomId(), transport);
         getXmppTransports().put(transport.getRoomAlias().getConferenceJid(), transport);
     }
@@ -207,6 +212,14 @@ public class TransportPool implements Managed {
      */
     public void event(Event event) {
         EventContent content = event.getContent();
+
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Event: {}", event.getEventId());
+            LOGGER.debug("Type: {}", event.getType());
+            LOGGER.debug("Room: {}", event.getRoomId());
+            LOGGER.debug("Sender: {}", event.getSender());
+        }
+
         boolean commandInvoked = false;
         if (content instanceof RoomMember) {
             commandInvoked = joinOrLeave(event);
@@ -222,14 +235,51 @@ public class TransportPool implements Managed {
                 transport.event(event);
             } else {
                 LOGGER.error("Not found mapped room with id: {}", event.getRoomId());
+                tryToRunTransport(event);
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    protected void tryToRunTransport(Event event) {
+        if (getMatrixClient().room().joinedRooms().contains(event.getRoomId())) {
+            LOGGER.info("Matrix bot is a member");
+            Map<String, Object> content;
+            try {
+                content = getMatrixClient().event().eventContent(event.getRoomId(), Event.EventType.ROOM_ALIASES);
+            } catch (MatrixException e) {
+                LOGGER.error("Cannot get m.room.aliases events", e);
+                return;
+            }
+            Object objAliases = content.get("Aliases");
+            if (objAliases instanceof List) {
+                List<String> aliases = (List<String>) objAliases;
+                Optional<String> foundedAlias = aliases.stream().filter(alias -> ROOM_PATTERN.matcher(alias).matches()).findAny();
+                if (foundedAlias.isPresent()) {
+                    LOGGER.info("Room has the alias, run transport");
+                    String roomAlias = foundedAlias.get();
+                    runTransport(event.getRoomId(), roomAlias);
+                    Transport transport = getMxTransports().get(roomAlias);
+                    if (transport != null) {
+                        transport.event(event);
+                    } else {
+                        LOGGER.error("Cannot run transport");
+                    }
+                } else {
+                    LOGGER.info("Room doesn't have the alias, skip");
+                }
+            }
+        } else {
+            LOGGER.info("Matrix bot is not a member, skip");
         }
     }
 
     protected boolean processEvent(Event event) {
         EventContent content = event.getContent();
         if (content instanceof Text) {
-            String body = ((Text) content).getBody();
+            Text textContent = (Text) content;
+            LOGGER.debug("m.room.message: {}", textContent.getMsgtype());
+            String body = textContent.getBody();
             if (StringUtils.isNotBlank(body) && body.trim().startsWith(Id.localpart(getTransportConfiguration().getMasterUserId()))) {
                 String[] arguments = body.trim().split("\\s");
                 if (arguments.length < 2) {
@@ -256,6 +306,7 @@ public class TransportPool implements Managed {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     protected boolean connect(Event event, String command) {
         Matcher matcher = CONFERENCE.matcher(command);
         if (!matcher.matches()) {
@@ -267,6 +318,21 @@ public class TransportPool implements Managed {
             Id.domain(getTransportConfiguration().getMasterUserId()));
         RoomId roomId = new RoomId();
         roomId.setRoomId(event.getRoomId());
+        try {
+            Map<String, Object> content = getMatrixClient().event().eventContent(event.getRoomId(), Event.EventType.ROOM_ALIASES);
+            Optional<String> foundedAlias = ((List<String>) content.get("aliases")).stream()
+                .filter(a -> ROOM_PATTERN.matcher(a).matches()).findAny();
+            if (foundedAlias.isPresent()) {
+                LOGGER.warn("Alias already exist, skip");
+                return true;
+            } else {
+                LOGGER.debug("Room doesn't have alias, add");
+            }
+        } catch (MatrixException e) {
+            LOGGER.warn("Cannot get m.room.aliases");
+        } catch (ClassCastException e) {
+            LOGGER.error("Wrong event content", e);
+        }
         try {
             getMatrixClient().room().newAlias(roomId, alias);
         } catch (MatrixException e) {
@@ -329,18 +395,22 @@ public class TransportPool implements Managed {
     }
 
     protected boolean createOrRemoveTransport(Event event) {
+        LOGGER.info("Check the alias");
         Optional<String> foundAlias = ((RoomAliases) event.getContent()).getAliases().stream()
             .filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
             .findAny();
         if (foundAlias.isPresent()) {
+            LOGGER.info("Room has the alias, start transport");
             runTransport(event.getRoomId(), foundAlias.get());
             return true;
         } else {
+            LOGGER.info("Room has not the alias, remove transport");
             Optional<String> joinedRoom = getMatrixClient().room().joinedRooms().stream().filter(roomId -> roomId.equals(event.getRoomId()))
                 .findAny();
             if (!joinedRoom.isPresent()) {
                 Transport transportToRemove = getMxTransports().remove(event.getRoomId());
                 if (transportToRemove != null) {
+                    LOGGER.info("Remove transport");
                     transportToRemove.remove();
                     return true;
                 }
@@ -352,24 +422,42 @@ public class TransportPool implements Managed {
     protected boolean joinOrLeave(Event event) {
         RoomMember content = (RoomMember) event.getContent();
 
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("m.room.member: {}", content.getMembership());
+            LOGGER.debug("state_key", event.getStateKey());
+        }
+
         if (!getTransportConfiguration().getMasterUserId().equals(event.getStateKey()) || this.maintenanceMode) {
+            LOGGER.debug("Skip");
             return false;
         }
 
         switch (content.getMembership()) {
+            case Event.MembershipState.JOIN:
+                LOGGER.debug("Master bot has joined to the room");
+                return true;
             case Event.MembershipState.INVITE:
+                LOGGER.info("Invite the master bot");
                 addInviter(event.getRoomId(), event.getSender());
                 getMatrixClient().room().joinByIdOrAlias(event.getRoomId());
                 return true;
             case Event.MembershipState.BAN:
             case Event.MembershipState.LEAVE:
                 if (getMatrixClient().room().joinedRooms().contains(event.getRoomId())) {
+                    LOGGER.info("Master bot doesn't join, skip");
                     return false;
                 }
 
+                LOGGER.info("Remove transport");
                 removeInviter(event.getRoomId());
                 Transport transport = getMxTransports().remove(event.getRoomId());
                 if (transport != null) {
+                    if (LOGGER.isInfoEnabled()) {
+                        RoomAlias roomAlias = transport.getRoomAlias();
+                        LOGGER.info("Room id: {}", roomAlias.getRoomId());
+                        LOGGER.info("Alias: {}", roomAlias.getAlias());
+                        LOGGER.info("Conference url: {}", roomAlias.getConferenceJid());
+                    }
                     transport.remove();
                 }
                 return true;
