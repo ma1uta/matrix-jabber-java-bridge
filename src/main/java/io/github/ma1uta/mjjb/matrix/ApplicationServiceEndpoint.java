@@ -25,6 +25,8 @@ import io.github.ma1uta.mjjb.dao.MatrixTransactionDao;
 import io.github.ma1uta.mjjb.transport.TransportPool;
 import org.apache.commons.lang3.StringUtils;
 import org.jdbi.v3.core.Jdbi;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import javax.servlet.http.HttpServletRequest;
@@ -35,6 +37,8 @@ import javax.ws.rs.core.Response;
  * AS interface.
  */
 public class ApplicationServiceEndpoint implements ApplicationApi {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ApplicationServiceEndpoint.class);
 
     private final TransportPool pool;
     private final Jdbi jdbi;
@@ -65,7 +69,13 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
         getJdbi().useTransaction(handle -> {
             MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
             if (dao.exist(txnId) == 0) {
-                request.getEvents().parallelStream().forEach(event -> getPool().event(event));
+                request.getEvents().parallelStream().forEach(event -> {
+                    try {
+                        getPool().event(event);
+                    } catch (Exception e) {
+                        LOGGER.error("Cannot process event", e);
+                    }
+                });
                 dao.save(txnId, LocalDateTime.now());
             }
         });

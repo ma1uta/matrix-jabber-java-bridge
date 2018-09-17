@@ -396,25 +396,31 @@ public class TransportPool implements Managed {
 
     protected boolean createOrRemoveTransport(Event event) {
         LOGGER.info("Check the alias");
-        Optional<String> foundAlias = ((RoomAliases) event.getContent()).getAliases().stream()
-            .filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
-            .findAny();
-        if (foundAlias.isPresent()) {
-            LOGGER.info("Room has the alias, start transport");
-            runTransport(event.getRoomId(), foundAlias.get());
-            return true;
-        } else {
-            LOGGER.info("Room has not the alias, remove transport");
-            Optional<String> joinedRoom = getMatrixClient().room().joinedRooms().stream().filter(roomId -> roomId.equals(event.getRoomId()))
+        try {
+            Optional<String> foundAlias = ((RoomAliases) event.getContent()).getAliases().stream()
+                .filter(alias -> ROOM_PATTERN.matcher(Id.localpart(alias)).matches())
                 .findAny();
-            if (!joinedRoom.isPresent()) {
-                Transport transportToRemove = getMxTransports().remove(event.getRoomId());
-                if (transportToRemove != null) {
-                    LOGGER.info("Remove transport");
-                    transportToRemove.remove();
-                    return true;
+
+            if (foundAlias.isPresent()) {
+                LOGGER.info("Room has the alias, start transport");
+                runTransport(event.getRoomId(), foundAlias.get());
+                return true;
+            } else {
+                LOGGER.info("Room has not the alias, remove transport");
+                Optional<String> joinedRoom = getMatrixClient().room().joinedRooms().stream()
+                    .filter(roomId -> roomId.equals(event.getRoomId()))
+                    .findAny();
+                if (!joinedRoom.isPresent()) {
+                    Transport transportToRemove = getMxTransports().remove(event.getRoomId());
+                    if (transportToRemove != null) {
+                        LOGGER.info("Remove transport");
+                        transportToRemove.remove();
+                        return true;
+                    }
                 }
             }
+        } catch (Exception e) {
+            LOGGER.error("Cannot create or remove the transport", e);
         }
         return false;
     }
