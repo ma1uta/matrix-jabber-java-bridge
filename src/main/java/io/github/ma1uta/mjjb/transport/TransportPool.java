@@ -289,6 +289,8 @@ public class TransportPool implements Managed {
 
                 String command = Arrays.stream(arguments).skip(2).collect(Collectors.joining(" "));
 
+                LOGGER.debug("Command: {}", command);
+
                 switch (arguments[1]) {
                     case "connect":
                         return connect(event, command);
@@ -351,6 +353,11 @@ public class TransportPool implements Managed {
         if (transport != null) {
             transport.remove();
             removeInviter(event.getRoomId());
+        } else {
+            MatrixClient matrixClient = getMatrixClient();
+            if (matrixClient.room().joinedRooms().contains(event.getRoomId())) {
+                matrixClient.room().leave(event.getRoomId());
+            }
         }
 
         return false;
