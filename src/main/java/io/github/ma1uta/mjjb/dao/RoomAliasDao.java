@@ -36,7 +36,7 @@ public interface RoomAliasDao {
      * Pattern for the room alias. (#&lt;prefix&gt;_&lt;conference_name&gt;_&lt;xmpp_url&gt;:&lt;homeserver&gt;).
      * The full conference url will be "conference_name@xmpp_url".
      * <br>
-     * For example, the room's alias "#xmpp_myconf_conference.jabber.org:matrix.org" is corresponding to the
+     * For example, the room's alias "#_xmpp_myconf_conference.jabber.org:matrix.org" is corresponding to the
      * "myconf@conference.jabber.org" conference.
      */
     Pattern ROOM_PATTERN = Pattern.compile("_([a-zA-Z0-9.=\\-/]+)_([a-zA-Z0-9.=\\-/_]+)_([a-zA-Z0-9.=\\-/]+)");
@@ -78,7 +78,7 @@ public interface RoomAliasDao {
      * @return the saved room alias.
      */
     default RoomAlias save(String alias, String roomId) {
-        String localpart = Id.localpart(alias);
+        String localpart = Id.getInstance().localpart(alias);
         Matcher matcher = ROOM_PATTERN.matcher(localpart);
         if (!matcher.matches()) {
             throw new IllegalArgumentException(

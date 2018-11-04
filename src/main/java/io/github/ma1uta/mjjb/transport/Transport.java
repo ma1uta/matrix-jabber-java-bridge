@@ -16,30 +16,35 @@
 
 package io.github.ma1uta.mjjb.transport;
 
-import static io.github.ma1uta.matrix.Event.MembershipState.BAN;
-import static io.github.ma1uta.matrix.Event.MembershipState.JOIN;
-import static io.github.ma1uta.matrix.Event.MembershipState.LEAVE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.OFFLINE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.ONLINE;
 import static io.github.ma1uta.matrix.client.model.presence.PresenceStatus.PresenceType.UNAVAILABLE;
+import static io.github.ma1uta.matrix.event.Event.MembershipState.BAN;
+import static io.github.ma1uta.matrix.event.Event.MembershipState.JOIN;
+import static io.github.ma1uta.matrix.event.Event.MembershipState.LEAVE;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
-import io.github.ma1uta.jeon.exception.MatrixException;
-import io.github.ma1uta.matrix.Event;
+import io.github.ma1uta.matrix.client.AppServiceClient;
 import io.github.ma1uta.matrix.client.MatrixClient;
+import io.github.ma1uta.matrix.client.factory.jaxrs.JaxRsRequestFactory;
 import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
 import io.github.ma1uta.matrix.client.model.presence.PresenceStatus;
-import io.github.ma1uta.matrix.events.Presence;
-import io.github.ma1uta.matrix.events.RoomMember;
-import io.github.ma1uta.matrix.events.RoomMessage;
-import io.github.ma1uta.matrix.events.messages.Text;
+import io.github.ma1uta.matrix.event.Presence;
+import io.github.ma1uta.matrix.event.RoomEvent;
+import io.github.ma1uta.matrix.event.RoomMember;
+import io.github.ma1uta.matrix.event.RoomMessage;
+import io.github.ma1uta.matrix.event.content.RoomMemberContent;
+import io.github.ma1uta.matrix.event.content.RoomMessageContent;
+import io.github.ma1uta.matrix.event.message.Text;
+import io.github.ma1uta.matrix.impl.exception.MatrixException;
 import io.github.ma1uta.mjjb.dao.AppServerUserDao;
 import io.github.ma1uta.mjjb.dao.RoomAliasDao;
 import io.github.ma1uta.mjjb.model.RoomAlias;
 import io.github.ma1uta.mjjb.xmpp.ChatRoom;
 import io.github.ma1uta.mjjb.xmpp.MultiUserChatManager;
 import io.github.ma1uta.mjjb.xmpp.OccupantEvent;
+import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,8 +57,10 @@ import rocks.xmpp.extensions.component.accept.ExternalComponent;
 import java.io.Closeable;
 import java.net.URL;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
 import javax.ws.rs.client.Client;
 
 /**
@@ -63,11 +70,9 @@ public class Transport implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Transport.class);
 
-    private final Object matrixMonitor = new Object();
-
     private ExternalComponent xmppComponent;
 
-    private MatrixClient matrixComponent;
+    private AppServiceClient matrixComponent;
 
     private RoomAlias roomAlias;
 
@@ -88,8 +93,9 @@ public class Transport implements Closeable {
     public Transport(TransportConfiguration configuration, ExternalComponent xmppComponent, Client httpClient, RoomAlias roomAlias,
                      Jdbi jdbi) {
         this.xmppComponent = xmppComponent;
-        this.matrixComponent = new MatrixClient(configuration.getMatrixHomeserver(), httpClient, true, false);
-        this.matrixComponent.setAccessToken(configuration.getAccessToken());
+        this.matrixComponent = new AppServiceClient.Builder()
+            .requestFactory(new JaxRsRequestFactory(httpClient, configuration.getMatrixHomeserver()))
+            .userId(configuration.getMasterUserId()).accessToken(configuration.getAccessToken()).build();
         this.roomAlias = roomAlias;
         this.masterUserId = configuration.getMasterUserId();
         this.masterNick = nickInXmpp(masterUserId);
@@ -101,7 +107,7 @@ public class Transport implements Closeable {
         return xmppComponent;
     }
 
-    public MatrixClient getMatrixComponent() {
+    public AppServiceClient getMatrixComponent() {
         return matrixComponent;
     }
 
@@ -160,15 +166,19 @@ public class Transport implements Closeable {
         getChatRooms().put(getMasterNick(), chatRoom);
 
         chatRoom.enter(getMasterNick(), null, null, toJid(getMasterNick())).thenAccept(presence -> LOGGER.debug(presence.toString()));
-        chatRoom.discoverOccupants().thenAccept(occupants -> {
-            occupants.forEach(this::xmppNickEntered);
-            synchronized (matrixMonitor) {
-                MatrixClient mx = getMatrixComponent();
-                mx.setUserId(getMasterUserId());
-                mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
-                mx.event().joinedMembers(getRoomAlias().getRoomId()).getJoined().forEach((userId, roomMember) -> matrixNickEnter(userId));
-            }
-        });
+        List<String> occupants;
+        try {
+            occupants = chatRoom.discoverOccupants().get();
+        } catch (InterruptedException | ExecutionException e) {
+            LOGGER.error("Failed discover the conference occupants.", e);
+            throw new RuntimeException(e);
+        }
+        occupants.forEach(this::xmppNickEntered);
+        MatrixClient mx = getMatrixComponent();
+        if (!mx.room().joinedRooms().join().contains(getRoomAlias().getRoomId())) {
+            mx.room().joinByIdOrAlias(getRoomAlias().getRoomId()).join();
+        }
+        mx.event().joinedMembers(getRoomAlias().getRoomId()).join().getJoined().forEach((userId, roomMember) -> matrixNickEnter(userId));
     }
 
     /**
@@ -204,11 +214,7 @@ public class Transport implements Closeable {
                     }
             }
         }
-        synchronized (matrixMonitor) {
-            MatrixClient mx = getMatrixComponent();
-            mx.setUserId(mxUser);
-            mx.presence().setPresenceStatus(presence);
-        }
+        getMatrixComponent().userId(mxUser).presence().setPresenceStatus(presence).join();
     }
 
     protected void xmppOccupant(OccupantEvent occupantEvent) {
@@ -222,12 +228,8 @@ public class Transport implements Closeable {
                 if (mxUser == null || getMasterNick().equals(nick)) {
                     return;
                 }
-                synchronized (matrixMonitor) {
-                    MatrixClient mx = getMatrixComponent();
-                    mx.setUserId(mxUser);
-                    mx.room().leave(getRoomAlias().getRoomId());
-                    getXmppToMxUsers().remove(nick, mxUser);
-                }
+                getMatrixComponent().userId(mxUser).room().leave(getRoomAlias().getRoomId())
+                    .thenRun(() -> getXmppToMxUsers().remove(nick, mxUser)).join();
                 break;
             case ENTERED:
                 xmppNickEntered(nick);
@@ -250,11 +252,7 @@ public class Transport implements Closeable {
             return;
         }
 
-        synchronized (matrixMonitor) {
-            MatrixClient mx = getMatrixComponent();
-            mx.setUserId(mxUser);
-            mx.event().sendMessage(getRoomAlias().getRoomId(), message.getBody());
-        }
+        getMatrixComponent().userId(mxUser).event().sendMessage(getRoomAlias().getRoomId(), message.getBody()).join();
     }
 
     protected void xmppNickEntered(String xmppNick) {
@@ -263,35 +261,31 @@ public class Transport implements Closeable {
                 return;
             }
 
-            MatrixClient mx = getMatrixComponent();
+            AppServiceClient mx = getMatrixComponent();
             String displayName = nickInMatrix(xmppNick);
             String localpart = getPrefix() + displayName;
-            String userId;
-            synchronized (matrixMonitor) {
-                getJdbi().useTransaction(handle -> {
-                    AppServerUserDao dao = handle.attach(AppServerUserDao.class);
-                    if (dao.count(localpart) == 0) {
-                        try {
-                            RegisterRequest registerRequest = new RegisterRequest();
-                            registerRequest.setUsername(localpart);
-                            registerRequest.setInitialDeviceDisplayName(displayName);
-                            mx.setUserId(getMasterUserId());
-                            mx.account().register(registerRequest);
-                            mx.profile().setDisplayName(displayName);
-                        } catch (MatrixException e) {
-                            LOGGER.warn("Failed to register new user.", e);
-                        }
-                        dao.save(localpart);
+            String userId = "@" + localpart + ":" + new URL(getMatrixComponent().getHomeserverUrl()).getHost();
+            getJdbi().useTransaction(handle -> {
+                AppServerUserDao dao = handle.attach(AppServerUserDao.class);
+                if (dao.count(localpart) == 0) {
+                    try {
+                        RegisterRequest registerRequest = new RegisterRequest();
+                        registerRequest.setUsername(localpart);
+                        registerRequest.setInitialDeviceDisplayName(displayName);
+                        mx.account().register(registerRequest).join();
+                        mx.userId(userId).profile().setDisplayName(displayName).join();
+                    } catch (MatrixException e) {
+                        LOGGER.warn("Failed to register new user.", e);
                     }
+                    dao.save(localpart);
+                }
 
-                });
-                userId = "@" + localpart + ":" + new URL(getMatrixComponent().getHomeserverUrl()).getHost();
-                getXmppToMxUsers().put(xmppNick, userId);
+            });
+            getXmppToMxUsers().put(xmppNick, userId);
 
-                mx.setUserId(userId);
-                mx.profile().setDisplayName(displayName);
-                mx.room().joinByIdOrAlias(getRoomAlias().getRoomId());
-            }
+            AppServiceClient userClient = mx.userId(userId);
+            userClient.profile().setDisplayName(displayName).join();
+            userClient.room().joinByIdOrAlias(getRoomAlias().getRoomId()).join();
         } catch (Exception e) {
             LOGGER.error("Cannot fetch occupants", e);
         }
@@ -316,12 +310,7 @@ public class Transport implements Closeable {
     }
 
     protected String nickInXmpp(String userId) {
-        String nick;
-        synchronized (matrixMonitor) {
-            MatrixClient mx = getMatrixComponent();
-            mx.setUserId(userId);
-            nick = mx.profile().showDisplayName(userId);
-        }
+        String nick = getMatrixComponent().userId(userId).profile().showDisplayName(userId).join();
         if (getXmppToMxUsers().keySet().contains(nick)) {
             nick = nick + "#" + new Random().nextInt();
         }
@@ -341,17 +330,17 @@ public class Transport implements Closeable {
      *
      * @param event event.
      */
-    public void event(Event event) {
+    public void event(RoomEvent event) {
         String sender = event.getSender();
         String nick = getMxToXmppUsers().get(sender);
         if (getMasterUserId().equals(sender)) {
-            LOGGER.debug("Event sent by master bot, skip");
+            LOGGER.debug("Event sent by master bot, skip.");
             return;
         }
-        if (nick == null && !(event.getContent() instanceof RoomMember)) {
+        if (nick == null && !(event instanceof RoomMember)) {
             if (LOGGER.isWarnEnabled()) {
                 if (getXmppToMxUsers().inverse().get(sender) != null) {
-                    LOGGER.debug("Event sent by puppet user, skip");
+                    LOGGER.debug("Event sent by puppet user, skip.");
                 } else {
                     LOGGER.warn("Cannot found the puppet user: {}", sender);
                 }
@@ -361,51 +350,54 @@ public class Transport implements Closeable {
 
         Jid jid = toJid(nick);
         LOGGER.debug("Jid: {}", jid);
-        if (event.getContent() instanceof RoomMessage) {
-            matrixMessage(event, jid);
-        } else if (event.getContent() instanceof Presence) {
-            matrixPresence(event, jid);
-        } else if (event.getContent() instanceof RoomMember) {
-            matrixOccupant(event);
+        if (event instanceof RoomMessage) {
+            matrixMessage((RoomMessage) event, jid);
+        } else if (event instanceof RoomMember) {
+            matrixOccupant((RoomMember) event);
         }
+    }
+
+    public void reEnter(String xmppUser) {
+
     }
 
     /**
      * Remove this transport.
      */
-    public void remove() {
-        getJdbi().useTransaction(handle -> {
-            MatrixClient matrixClient = getMatrixComponent();
-
-            synchronized (matrixMonitor) {
-                close();
-
-                matrixClient.setUserId(getMasterUserId());
-                try {
-                    matrixClient.room().delete(getRoomAlias().getAlias());
-                } catch (MatrixException e) {
-                    LOGGER.error("Cannot delete the alias", e);
-                }
-                if (matrixClient.room().joinedRooms().contains(getRoomAlias().getRoomId())) {
-                    matrixClient.room().leave(getRoomAlias().getRoomId());
-                }
-            }
-            handle.attach(RoomAliasDao.class).delete(getRoomAlias().getRoomId());
-        });
+    public void remove(Handle handle) {
+        MatrixClient matrixClient = getMatrixComponent();
+        close();
+        try {
+            matrixClient.room().delete(getRoomAlias().getAlias()).join();
+        } catch (MatrixException e) {
+            LOGGER.error("Cannot delete the alias", e);
+        }
+        if (matrixClient.room().joinedRooms().join().contains(getRoomAlias().getRoomId())) {
+            matrixClient.room().leave(getRoomAlias().getRoomId());
+        }
+        handle.attach(RoomAliasDao.class).delete(getRoomAlias().getRoomId());
     }
 
-    protected void matrixMessage(Event event, Jid jid) {
+    protected void matrixMessage(RoomMessage event, Jid jid) {
         LOGGER.debug("m.room.message");
-        Text text = (Text) event.getContent();
+        RoomMessageContent content = event.getContent();
+        LOGGER.debug("msgtype: {}", content.getMsgtype());
+
+        if (content instanceof Text) {
+            text((Text) content, jid);
+        }
+    }
+
+    protected void text(Text text, Jid jid) {
         Message message = new Message(null, null, text.getBody());
         message.setFrom(jid);
         getChatRoom(jid.getLocal()).sendMessage(message);
     }
 
-    protected void matrixOccupant(Event event) {
-        RoomMember member = (RoomMember) event.getContent();
+    protected void matrixOccupant(RoomMember event) {
+        RoomMemberContent content = event.getContent();
         String stateKey = event.getStateKey();
-        switch (member.getMembership()) {
+        switch (content.getMembership()) {
             case JOIN:
                 LOGGER.debug("Join new member");
                 matrixNickEnter(stateKey);
@@ -431,12 +423,11 @@ public class Transport implements Closeable {
         }
     }
 
-    protected void matrixPresence(Event event, Jid jid) {
+    protected void matrixPresence(Presence event, Jid jid) {
         LOGGER.debug("m.presence");
-        Presence presence = (Presence) event.getContent();
         rocks.xmpp.core.stanza.model.Presence xmppPresence = new rocks.xmpp.core.stanza.model.Presence();
         xmppPresence.setFrom(jid);
-        switch (presence.getPresence()) {
+        switch (event.getContent().getPresence()) {
             case ONLINE:
                 LOGGER.debug("online: slip");
                 break;
@@ -457,11 +448,8 @@ public class Transport implements Closeable {
 
     @Override
     public void close() {
-        MatrixClient mx = getMatrixComponent();
-        getXmppToMxUsers().values().forEach(userId -> {
-            mx.setUserId(userId);
-            mx.room().leave(getRoomAlias().getRoomId());
-        });
+        AppServiceClient mx = getMatrixComponent();
+        getXmppToMxUsers().values().forEach(userId -> mx.userId(userId).room().leave(getRoomAlias().getRoomId()));
         getXmppToMxUsers().clear();
 
         getMxToXmppUsers().values().forEach(nick -> getChatRoom(nick).exit(toJid(nick)));

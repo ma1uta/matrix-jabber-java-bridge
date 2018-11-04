@@ -16,22 +16,26 @@
 
 package io.github.ma1uta.mjjb.matrix;
 
-import io.github.ma1uta.jeon.exception.MatrixException;
 import io.github.ma1uta.matrix.EmptyResponse;
 import io.github.ma1uta.matrix.ErrorResponse;
 import io.github.ma1uta.matrix.application.api.ApplicationApi;
 import io.github.ma1uta.matrix.application.model.TransactionRequest;
+import io.github.ma1uta.matrix.impl.exception.MatrixException;
 import io.github.ma1uta.mjjb.dao.MatrixTransactionDao;
 import io.github.ma1uta.mjjb.transport.TransportPool;
-import org.apache.commons.lang3.StringUtils;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
 
 /**
  * AS interface.
@@ -42,12 +46,11 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
 
     private final TransportPool pool;
     private final Jdbi jdbi;
-    private final String hsToken;
+    private final Executor executor = Executors.newCachedThreadPool();
 
-    public ApplicationServiceEndpoint(TransportPool pool, Jdbi jdbi, String hsToken) {
+    public ApplicationServiceEndpoint(TransportPool pool, Jdbi jdbi) {
         this.pool = pool;
         this.jdbi = jdbi;
-        this.hsToken = hsToken;
     }
 
     public Jdbi getJdbi() {
@@ -58,51 +61,52 @@ public class ApplicationServiceEndpoint implements ApplicationApi {
         return pool;
     }
 
-    public String getHsToken() {
-        return hsToken;
-    }
-
     @Override
-    public EmptyResponse transaction(String txnId, TransactionRequest request, HttpServletRequest servletRequest,
-                                     HttpServletResponse servletResponse) {
-        validateAsToken(servletRequest);
-        getJdbi().useTransaction(handle -> {
-            MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
-            if (dao.exist(txnId) == 0) {
-                request.getEvents().parallelStream().forEach(event -> {
-                    try {
-                        getPool().event(event);
-                    } catch (Exception e) {
-                        LOGGER.error("Cannot process event", e);
+    public void transaction(String txnId, TransactionRequest request, @Context UriInfo uriInfo, @Context HttpHeaders httpHeaders,
+                            @Suspended AsyncResponse asyncResponse) {
+        executor.execute(() -> {
+            try {
+                getJdbi().useTransaction(handle -> {
+                    MatrixTransactionDao dao = handle.attach(MatrixTransactionDao.class);
+                    LOGGER.debug("Transaction: {}", txnId);
+                    if (dao.exist(txnId) == 0) {
+                        try {
+                            request.getEvents().parallelStream().forEach(event -> {
+                                try {
+                                    getPool().event(event, handle);
+                                } catch (Exception e) {
+                                    LOGGER.error("Cannot process event", e);
+                                }
+                            });
+                        } catch (Exception e) {
+                            LOGGER.error("Failed process events", e);
+                        } finally {
+                            dao.save(txnId, LocalDateTime.now());
+                        }
+                    } else {
+                        LOGGER.warn("");
                     }
                 });
-                dao.save(txnId, LocalDateTime.now());
+                asyncResponse.resume(new EmptyResponse());
+            } catch (Exception e) {
+                LOGGER.error("Unexpected exception", e);
+                asyncResponse.resume(e);
             }
         });
-        return new EmptyResponse();
     }
 
     @Override
-    public EmptyResponse rooms(String roomAlias, HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
-        validateAsToken(servletRequest);
-        getPool().createTransport(roomAlias);
-        return new EmptyResponse();
+    public void rooms(String roomAlias, @Context UriInfo uriInfo, @Context HttpHeaders httpHeaders,
+                      @Suspended AsyncResponse asyncResponse) {
+        executor.execute(() -> {
+            getPool().createTransport(roomAlias);
+            asyncResponse.resume(new EmptyResponse());
+        });
     }
 
     @Override
-    public EmptyResponse users(String userId, HttpServletRequest servletRequest, HttpServletResponse servletResponse) {
-        validateAsToken(servletRequest);
-        throw new MatrixException(ErrorResponse.Code.M_FORBIDDEN, "Not supported.", Response.Status.FORBIDDEN.getStatusCode());
-    }
-
-    protected void validateAsToken(HttpServletRequest servletRequest) {
-        String accessToken = servletRequest.getParameter("access_token");
-        if (StringUtils.isBlank(accessToken)) {
-            throw new MatrixException("_UNAUTHORIZED", "", HttpServletResponse.SC_UNAUTHORIZED);
-        }
-
-        if (!getHsToken().equals(accessToken)) {
-            throw new MatrixException(ErrorResponse.Code.M_FORBIDDEN, "", HttpServletResponse.SC_FORBIDDEN);
-        }
+    public void users(String userId, @Context UriInfo uriInfo, @Context HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
+        asyncResponse
+            .resume(new MatrixException(ErrorResponse.Code.M_FORBIDDEN, "Not supported.", Response.Status.FORBIDDEN.getStatusCode()));
     }
 }

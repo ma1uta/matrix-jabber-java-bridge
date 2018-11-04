@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import io.dropwizard.Application;
 import io.dropwizard.client.JerseyClientBuilder;
 import io.dropwizard.configuration.EnvironmentVariableSubstitutor;
@@ -30,7 +31,12 @@ import io.dropwizard.migrations.MigrationsBundle;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.sslreload.SslReloadBundle;
+import io.github.ma1uta.matrix.event.Event;
+import io.github.ma1uta.matrix.event.content.RoomMessageContent;
+import io.github.ma1uta.matrix.support.jackson.EventDeserializer;
+import io.github.ma1uta.matrix.support.jackson.RoomMessageContentDeserializer;
 import io.github.ma1uta.mjjb.matrix.ApplicationServiceEndpoint;
+import io.github.ma1uta.mjjb.matrix.SecurityContextFilter;
 import io.github.ma1uta.mjjb.transport.TransportConfiguration;
 import io.github.ma1uta.mjjb.transport.TransportPool;
 import org.jdbi.v3.core.Jdbi;
@@ -77,9 +83,17 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
     protected void initObjectMapper(Bootstrap<BridgeConfiguration> bootstrap) {
         ObjectMapper objectMapper = bootstrap.getObjectMapper();
 
+        // common properties
         objectMapper.enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY);
         objectMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+        // custom deserializers
+        SimpleModule eventModule = new SimpleModule();
+        eventModule.addDeserializer(Event.class, new EventDeserializer());
+        eventModule.addDeserializer(RoomMessageContent.class, new RoomMessageContentDeserializer());
+
+        objectMapper.registerModule(eventModule);
     }
 
     @Override
@@ -89,7 +103,8 @@ public class BridgeApplication extends Application<BridgeConfiguration> {
 
         TransportPool pool = new TransportPool(initXmpp(configuration), new TransportConfiguration(configuration), client, jdbi);
 
-        environment.jersey().register(new ApplicationServiceEndpoint(pool, jdbi, configuration.getMatrix().getHsToken()));
+        environment.jersey().register(new SecurityContextFilter(configuration.getMatrix().getHsToken()));
+        environment.jersey().register(new ApplicationServiceEndpoint(pool, jdbi));
         environment.lifecycle().manage(pool);
     }
 
