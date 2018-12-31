@@ -1,64 +1,13 @@
-xmpp:
-  componentName: 'mjjb.xmpp.server.tld'
-  sharedSecret: 'secret'
-  hostname: 'xmpp.server.tld'
-  port: 5223
 matrix:
-  homeserver: 'https://matrix.localhost:8448'
-  asToken: 'as_token'
-  hsToken: 'ms_token'
-  masterUserId: '@_xmpp_master:localhost'
+  url: 'http://localhost:8448'
+  as_token: 'as_token'
+  hs_token: 'hs_token'
+  master_user_id: '@_xmpp_master:localhost'
   prefix: '_xmpp_'
 
-httpClient:
-  gzipEnabled: false
-  gzipEnabledForRequests: false
-  chunkedEncodingEnabled: false
-  timeout: 20s
-logging:
-  level: ERROR
-  loggers:
-    "io.github.ma1uta": INFO
-  appenders:
-    - type: console
-      target: stderr
-    - type: file
-      currentLogFilename: mjjb.log
-      archive: true
-      archivedLogFilenamePattern: mjjb-%d.log
-      archivedFileCount: 2
-      immediateFlush: true
 database:
-  driverClass: org.postgresql.Driver
-  user: mjjb
+  username: mjjb
   password: mjjb
   url: jdbc:postgresql://localhost/mjjb
   properties:
     charSet: UTF-8
-  maxWaitForConnection: 1s
-  validationQuery: "/* MyApplication Health Check */ SELECT 1"
-  minSize: 8
-  maxSize: 32
-  checkConnectionWhileIdle: false
-server:
-  applicationConnectors:
-    - type: https
-      port: 8444
-      keyStorePath: keystore.pkcs12
-      keyStorePassword: keystorePassword
-      validateCerts: false
-      excludedCipherSuites:
-        - SSL_RSA_WITH_DES_CBC_SHA
-        - SSL_DHE_RSA_WITH_DES_CBC_SHA
-        - SSL_DHE_DSS_WITH_DES_CBC_SHA
-        - SSL_RSA_EXPORT_WITH_RC4_40_MD5
-        - SSL_RSA_EXPORT_WITH_DES40_CBC_SHA
-        - SSL_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA
-        - SSL_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA
-  adminConnectors:
-    - type: http
-      port: 8445
-      bindHost: 127.0.0.1
-  requestLog:
-    appenders:
-      - type: console

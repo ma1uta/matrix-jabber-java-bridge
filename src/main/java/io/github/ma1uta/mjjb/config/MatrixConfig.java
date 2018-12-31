@@ -1,51 +1,31 @@
-/*
- * Copyright sablintolya@gmail.com
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.github.ma1uta.mjjb.config;
 
-import org.hibernate.validator.constraints.NotBlank;
-import org.hibernate.validator.constraints.URL;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Configuration of the matrix AS.
+ * Matrix configuration.
  */
 public class MatrixConfig {
 
-    @URL
-    @NotBlank
-    private String homeserver;
+    private String url;
 
-    @NotBlank
+    @JsonProperty("as_token")
     private String asToken;
 
-    @NotBlank
+    @JsonProperty("hs_token")
     private String hsToken;
 
-    @NotBlank
+    @JsonProperty("master_user_id")
     private String masterUserId;
 
-    @NotBlank
     private String prefix;
 
-    public String getHomeserver() {
-        return homeserver;
+    public String getUrl() {
+        return url;
     }
 
-    public void setHomeserver(String homeserver) {
-        this.homeserver = homeserver;
+    public void setUrl(String url) {
+        this.url = url;
     }
 
     public String getAsToken() {
