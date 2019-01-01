@@ -4,6 +4,18 @@ matrix:
   hs_token: 'hs_token'
   master_user_id: '@_xmpp_master:localhost'
   prefix: '_xmpp_'
+  ssl:
+    type: pkcs12
+    key_store: ~/keystore.pkcs12
+    key_store_password: 123
+
+xmpp:
+  domain: 'localhost'
+  port: 5269
+  ssl:
+    type: pem
+    key: ~/privkey.pem
+    chain: ~/chain.pem
 
 database:
   username: mjjb

@@ -20,6 +20,8 @@ public class MatrixConfig {
 
     private String prefix;
 
+    private Cert ssl;
+
     public String getUrl() {
         return url;
     }
@@ -58,5 +60,13 @@ public class MatrixConfig {
 
     public void setPrefix(String prefix) {
         this.prefix = prefix;
+    }
+
+    public Cert getSsl() {
+        return ssl;
+    }
+
+    public void setSsl(Cert ssl) {
+        this.ssl = ssl;
     }
 }

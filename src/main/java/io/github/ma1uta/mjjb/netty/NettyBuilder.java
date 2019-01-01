@@ -56,13 +56,15 @@ public class NettyBuilder {
     /**
      * Create and start Netty server.
      *
-     * @param baseUri       base uri.
+     * @param inetHost      Host to binding.
+     * @param port          Port to binding.
      * @param initializer   Channel initializer.
      * @param closeListener Channel close listener.
      * @return Netty channel instance.
      * @throws ProcessingException when there is an issue with creating new container.
      */
-    public static Channel createServer(URI baseUri, ChannelInitializer<?> initializer, Consumer<Future<? super Void>> closeListener)
+    public static Channel createServer(String inetHost, int port, ChannelInitializer<?> initializer,
+                                       Consumer<Future<? super Void>> closeListener)
         throws ProcessingException {
 
         // Configure the server.
@@ -77,9 +79,7 @@ public class NettyBuilder {
                 .option(ChannelOption.SO_BACKLOG, DEFAULT_BACKLOG)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
 
-            int port = getPort(baseUri);
-
-            Channel ch = bootstrap.bind(port).sync().channel();
+            Channel ch = bootstrap.bind(inetHost, port).sync().channel();
 
             ch.closeFuture().addListener(future -> {
                 closeListener.accept(future);
@@ -94,7 +94,7 @@ public class NettyBuilder {
         }
     }
 
-    private static int getPort(URI uri) {
+    public static int getPort(URI uri) {
         if (uri.getPort() == -1) {
             if ("http".equalsIgnoreCase(uri.getScheme())) {
                 return DEFAULT_HTTP_PORT;
@@ -106,5 +106,9 @@ public class NettyBuilder {
         }
 
         return uri.getPort();
+    }
+
+    public static String getHost(URI uri) {
+        return uri.getHost();
     }
 }

@@ -16,11 +16,15 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
+import io.github.ma1uta.mjjb.config.XmppConfig;
+import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.net.ConnectionConfiguration;
 
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import javax.net.ssl.SSLContext;
 import javax.xml.bind.JAXBException;
@@ -30,17 +34,20 @@ import javax.xml.bind.JAXBException;
  */
 public class XmppServer {
 
-    private final Set<Session> sessions = new HashSet<>();
+    private final Set<IncomingSession> initialIncomingSessions = new HashSet<>();
+    private final Map<Jid, IncomingSession> establishedIncomingSessions = new HashMap<>();
+    private final XmppConfig config;
+    private final SSLContext sslContext;
     private final ConnectionConfiguration connectionConfig = new ConnectionConfiguration() {
         @Override
         public ChannelEncryption getChannelEncryption() {
-            return ChannelEncryption.REQUIRED;
+            return sslContext != null ? ChannelEncryption.REQUIRED : ChannelEncryption.DISABLED;
         }
 
         @Override
         public SSLContext getSSLContext() {
             try {
-                return SSLContext.getDefault();
+                return sslContext != null ? sslContext : SSLContext.getDefault();
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
                 throw new RuntimeException(e);
@@ -48,16 +55,25 @@ public class XmppServer {
         }
     };
 
+    public XmppServer(XmppConfig config, SSLContext sslContext) {
+        this.config = config;
+        this.sslContext = sslContext;
+    }
+
     /**
      * Create new session.
      *
      * @return new session.
      * @throws JAXBException when cannot create xml unmarshaller/marshaller.
      */
-    public Session newSession() throws JAXBException {
-        Session session = new Session();
-        sessions.add(session);
-        return session;
+    public IncomingSession newSession() throws JAXBException {
+        IncomingSession incomingSession = new IncomingSession(this);
+        initialIncomingSessions.add(incomingSession);
+        return incomingSession;
+    }
+
+    public Set<IncomingSession> getInitialIncomingSessions() {
+        return initialIncomingSessions;
     }
 
     /**
@@ -67,5 +83,14 @@ public class XmppServer {
      */
     public ConnectionConfiguration getConnectionConfiguration() {
         return connectionConfig;
+    }
+
+    public void establish(Jid jid, IncomingSession incomingSession) {
+        initialIncomingSessions.remove(incomingSession);
+        establishedIncomingSessions.put(jid, incomingSession);
+    }
+
+    public XmppConfig getConfig() {
+        return config;
     }
 }

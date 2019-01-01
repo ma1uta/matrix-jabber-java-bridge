@@ -7,6 +7,8 @@ public class AppConfig {
 
     private MatrixConfig matrix;
 
+    private XmppConfig xmpp;
+
     private DatabaseConfig database;
 
     public MatrixConfig getMatrix() {
@@ -15,6 +17,14 @@ public class AppConfig {
 
     public void setMatrix(MatrixConfig matrix) {
         this.matrix = matrix;
+    }
+
+    public XmppConfig getXmpp() {
+        return xmpp;
+    }
+
+    public void setXmpp(XmppConfig xmpp) {
+        this.xmpp = xmpp;
     }
 
     public DatabaseConfig getDatabase() {

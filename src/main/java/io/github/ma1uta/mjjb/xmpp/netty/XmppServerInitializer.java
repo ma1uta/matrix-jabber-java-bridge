@@ -20,6 +20,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;
 import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
+import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.tls.server.StartTlsNegotiator;
 import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
@@ -37,20 +38,22 @@ public class XmppServerInitializer extends ChannelInitializer<SocketChannel> {
 
     @Override
     protected void initChannel(SocketChannel ch) throws Exception {
-        Session session = xmppServer.newSession();
+        IncomingSession incomingSession = xmppServer.newSession();
         connection = new NettyChannelConnection(
             ch,
-            session::handleStream,
-            session::onRead,
-            session::getUnmarshaller,
-            session::onWrite,
-            session::getMarshaller,
-            session::onException,
+            incomingSession::handleStream,
+            incomingSession::onRead,
+            incomingSession::getUnmarshaller,
+            incomingSession::onWrite,
+            incomingSession::getMarshaller,
+            incomingSession::onException,
             xmppServer.getConnectionConfiguration()
         );
-        session.setConnection(connection);
-        session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(connection));
-        session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection));
+        incomingSession.setConnection(connection);
+        if (xmppServer.getConnectionConfiguration().getChannelEncryption() == ChannelEncryption.REQUIRED) {
+            incomingSession.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(connection));
+        }
+        incomingSession.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection));
     }
 
     @Override
