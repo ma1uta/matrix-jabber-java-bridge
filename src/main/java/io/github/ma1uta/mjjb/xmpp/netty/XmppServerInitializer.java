@@ -38,7 +38,7 @@ public class XmppServerInitializer extends ChannelInitializer<SocketChannel> {
 
     @Override
     protected void initChannel(SocketChannel ch) throws Exception {
-        IncomingSession incomingSession = xmppServer.newSession();
+        IncomingSession incomingSession = xmppServer.newIncomingSession();
         connection = new NettyChannelConnection(
             ch,
             incomingSession::handleStream,

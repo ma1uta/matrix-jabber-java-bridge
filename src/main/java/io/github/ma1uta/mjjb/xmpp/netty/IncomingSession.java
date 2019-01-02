@@ -16,43 +16,27 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
+import io.github.ma1uta.mjjb.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
-import rocks.xmpp.core.stream.StreamNegotiationResult;
-import rocks.xmpp.core.stream.model.StreamElement;
 import rocks.xmpp.core.stream.model.StreamFeatures;
 import rocks.xmpp.core.stream.model.StreamHeader;
-import rocks.xmpp.core.stream.server.ServerStreamFeaturesManager;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 import java.util.Locale;
 import java.util.UUID;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
 
 /**
- * XMPP S2S session.
+ * XMPP S2S incoming session.
  */
-public class IncomingSession implements AutoCloseable {
+public class IncomingSession extends Session {
 
-    private NettyChannelConnection connection;
-    private final Unmarshaller unmarshaller;
-    private final Marshaller marshaller;
-    private final ServerStreamFeaturesManager streamFeaturesManager = new ServerStreamFeaturesManager();
-    private final XmppServer xmppServer;
+    private static final Logger LOGGER = LoggerFactory.getLogger(IncomingSession.class);
+    private static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
 
     public IncomingSession(XmppServer xmppServer) throws JAXBException {
-        this.xmppServer = xmppServer;
-        this.unmarshaller = ServerConfiguration.JAXB_CONTEXT.createUnmarshaller();
-        this.marshaller = ServerConfiguration.JAXB_CONTEXT.createMarshaller();
-    }
-
-    public Unmarshaller getUnmarshaller() {
-        return unmarshaller;
-    }
-
-    public Marshaller getMarshaller() {
-        return marshaller;
+        super(xmppServer);
     }
 
     /**
@@ -62,6 +46,9 @@ public class IncomingSession implements AutoCloseable {
      * @return {@code true} to restart stream, else {@code false}.
      */
     public boolean handleStream(Object streamElement) {
+        if (super.handleStream(streamElement)) {
+            return true;
+        }
         if (streamElement instanceof StreamHeader) {
             StreamHeader streamHeader = (StreamHeader) streamElement;
             getXmppServer().establish(streamHeader.getFrom(), this);
@@ -75,69 +62,6 @@ public class IncomingSession implements AutoCloseable {
             // send supported features.
             getConnection().send(new StreamFeatures(getStreamFeaturesManager().getStreamFeatures()));
         }
-        if (streamElement instanceof StreamElement) {
-            StreamNegotiationResult result = getStreamFeaturesManager().handleElement((StreamElement) streamElement);
-            if (result == StreamNegotiationResult.RESTART) {
-                return true;
-            }
-        }
         return false;
-    }
-
-    /**
-     * Read handler.
-     *
-     * @param xml     string representation of the stanza.
-     * @param element stanza.
-     */
-    public void onRead(String xml, StreamElement element) {
-
-    }
-
-    /**
-     * Write handler.
-     *
-     * @param xml     string representation of the stanza.
-     * @param element stanza.
-     */
-    public void onWrite(String xml, StreamElement element) {
-
-    }
-
-    /**
-     * Exception handler.
-     *
-     * @param throwable exception.
-     */
-    public void onException(Throwable throwable) {
-        if (throwable instanceof StreamElement) {
-            getConnection().send((StreamElement) throwable);
-        }
-        try {
-            getConnection().close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public ServerStreamFeaturesManager getStreamFeaturesManager() {
-        return streamFeaturesManager;
-    }
-
-    public NettyChannelConnection getConnection() {
-        return connection;
-    }
-
-    public void setConnection(NettyChannelConnection connection) {
-        this.connection = connection;
-    }
-
-    public XmppServer getXmppServer() {
-        return xmppServer;
-    }
-
-    @Override
-    public void close() throws Exception {
-        connection.close();
     }
 }

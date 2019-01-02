@@ -82,8 +82,8 @@ public class Bridge {
 
         NettyHttpContainer container = new NettyHttpContainer(new MatrixEndPoints(this.jdbi, config));
         JerseyServerInitializer initializer = new JerseyServerInitializer(uri, nettyContext, container);
-        matrixChannel = NettyBuilder
-            .createServer(uri.getHost(), NettyBuilder.getPort(uri), initializer, f -> container.getApplicationHandler().onShutdown(container));
+        matrixChannel = NettyBuilder.createServer(uri.getHost(), NettyBuilder.getPort(uri), initializer,
+            f -> container.getApplicationHandler().onShutdown(container));
     }
 
     private void initXmpp(XmppConfig config) {
@@ -99,13 +99,6 @@ public class Bridge {
 
         this.xmppServer = new XmppServer(config, javaContext);
         XmppServerInitializer initializer = new XmppServerInitializer(this.xmppServer);
-        xmppChannel = NettyBuilder
-            .createServer(config.getDomain(), config.getPort(), initializer, f -> this.xmppServer.getInitialIncomingSessions().forEach(s -> {
-                try {
-                    s.close();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }));
+        xmppChannel = NettyBuilder.createServer(config.getDomain(), config.getPort(), initializer, f -> this.xmppServer.close());
     }
 }

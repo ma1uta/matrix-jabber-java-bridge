@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.netty;
 
+import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -23,6 +24,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.Future;
 
 import java.net.URI;
@@ -68,23 +70,63 @@ public class NettyBuilder {
         throws ProcessingException {
 
         // Configure the server.
-        final EventLoopGroup bossGroup = new NioEventLoopGroup(1);
-        final EventLoopGroup workerGroup = new NioEventLoopGroup();
+        EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
 
         try {
             ServerBootstrap bootstrap = new ServerBootstrap();
             bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
-                .childHandler(initializer)
                 .option(ChannelOption.SO_BACKLOG, DEFAULT_BACKLOG)
-                .childOption(ChannelOption.SO_KEEPALIVE, true);
+                .childOption(ChannelOption.SO_KEEPALIVE, true)
+                .childHandler(initializer);
 
             Channel ch = bootstrap.bind(inetHost, port).sync().channel();
 
             ch.closeFuture().addListener(future -> {
-                closeListener.accept(future);
+                if (closeListener != null) {
+                    closeListener.accept(future);
+                }
 
                 bossGroup.shutdownGracefully();
+                workerGroup.shutdownGracefully();
+            });
+
+            return ch;
+        } catch (InterruptedException e) {
+            throw new ProcessingException(e);
+        }
+    }
+
+    /**
+     * Create and start Netty client.
+     *
+     * @param inetHost      Host to connecting.
+     * @param port          Port to connecting.
+     * @param initializer   Channel initializer.
+     * @param closeListener Channel close listener.
+     * @return Netty channel instance.
+     * @throws ProcessingException when there is an issue with creating new client.
+     */
+    public static Channel createClient(String inetHost, int port, ChannelInitializer<?> initializer,
+                                       Consumer<Future<? super Void>> closeListener) {
+
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
+
+        try {
+            Bootstrap bootstrap = new Bootstrap();
+            bootstrap.group(workerGroup)
+                .channel(NioSocketChannel.class)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .handler(initializer);
+
+            Channel ch = bootstrap.connect(inetHost, port).sync().channel();
+
+            ch.closeFuture().addListener(future -> {
+                if (closeListener != null) {
+                    closeListener.accept(future);
+                }
+
                 workerGroup.shutdownGracefully();
             });
 
@@ -106,9 +148,5 @@ public class NettyBuilder {
         }
 
         return uri.getPort();
-    }
-
-    public static String getHost(URI uri) {
-        return uri.getHost();
     }
 }

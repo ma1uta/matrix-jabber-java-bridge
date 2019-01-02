@@ -16,8 +16,10 @@
 
 package io.github.ma1uta.mjjb.matrix;
 
+import io.github.ma1uta.mjjb.Loggers;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
 import org.jdbi.v3.core.Jdbi;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -30,15 +32,17 @@ import javax.ws.rs.core.Application;
 @ApplicationPath("")
 public class MatrixEndPoints extends Application {
 
-    private final Jdbi jdbi;
     private final Set<Object> resources = new HashSet<>();
 
     public MatrixEndPoints(Jdbi jdbi, MatrixConfig config) {
-        this.jdbi = jdbi;
         MatrixAppResource appResource = new MatrixAppResource(jdbi);
         resources.add(appResource);
         resources.add(new LegacyMatrixAppResource(appResource));
         resources.add(new SecurityContextFilter(config.getAsToken()));
+        resources.add(new MatrixExceptionHandler());
+        if (LoggerFactory.getLogger(Loggers.REQUEST_LOGGER).isDebugEnabled()) {
+            resources.add(new LoggingFilter());
+        }
     }
 
     @Override
