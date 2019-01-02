@@ -16,9 +16,6 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
-import io.github.ma1uta.mjjb.Loggers;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stream.model.StreamFeatures;
 import rocks.xmpp.core.stream.model.StreamHeader;
@@ -31,9 +28,6 @@ import javax.xml.bind.JAXBException;
  * XMPP S2S incoming session.
  */
 public class IncomingSession extends Session {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(IncomingSession.class);
-    private static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
 
     public IncomingSession(XmppServer xmppServer) throws JAXBException {
         super(xmppServer);

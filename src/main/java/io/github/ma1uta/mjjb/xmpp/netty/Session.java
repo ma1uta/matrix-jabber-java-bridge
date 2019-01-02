@@ -34,8 +34,8 @@ import javax.xml.bind.Unmarshaller;
  */
 public class Session implements AutoCloseable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Session.class);
-    private static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
+    protected static final Logger LOGGER = LoggerFactory.getLogger(Session.class);
+    protected static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
 
     private NettyChannelConnection connection;
     private final Unmarshaller unmarshaller;
