@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.net.ConnectionConfiguration;
+import rocks.xmpp.core.stanza.model.Message;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
@@ -82,6 +83,7 @@ public class XmppServer implements AutoCloseable {
         LOGGER.debug("New outgoing session to {}.", jid.toString());
         OutgoingSession outgoingSession = new OutgoingSession(this, jid);
         getEstablishedOutgoingSessions().put(jid, outgoingSession);
+        outgoingSession.handshake();
         return outgoingSession;
     }
 
@@ -142,5 +144,27 @@ public class XmppServer implements AutoCloseable {
                 LOGGER.error("Failed close connection to " + jid.toString(), e);
             }
         });
+    }
+
+    /**
+     * Send outgoing message.
+     *
+     * @param message outgoing stanza.
+     */
+    public void send(Message message) {
+        OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(message.getTo());
+        if (outgoingSession != null) {
+            send0(outgoingSession, message);
+        } else {
+            try {
+                send0(newOutgoingSession(message.getTo()), message);
+            } catch (JAXBException e) {
+                LOGGER.error("Failed create JAXB marshaller/unmarshaller.", e);
+            }
+        }
+    }
+
+    private void send0(OutgoingSession outgoingSession, Message message) {
+        outgoingSession.getConnection().send(message);
     }
 }

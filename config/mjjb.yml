@@ -4,6 +4,7 @@ matrix:
   hs_token: 'hs_token'
   master_user_id: '@_xmpp_master:localhost'
   prefix: '_xmpp_'
+  homeserver: 'https://matrix.localhost'
   ssl:
     type: pkcs12
     key_store: ~/keystore.pkcs12

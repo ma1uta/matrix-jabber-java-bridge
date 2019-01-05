@@ -1,20 +1,25 @@
 CREATE TABLE "app_user" (
-  "localpart" VARCHAR(255) PRIMARY KEY
+  "localpart" TEXT PRIMARY KEY
 );
 
 CREATE TABLE "transaction" (
-  "id" VARCHAR(255) PRIMARY KEY,
-  "processed" TIMESTAMP
+  "id" TEXT PRIMARY KEY,
+  "processed" TIMESTAMP WITH TIMEZONE
 );
 
-CREATE TABLE "room_alias" (
-  "alias" VARCHAR(255) PRIMARY KEY,
-  "room_id" VARCHAR(255),
-  "conference_jid" VARCHAR(255)
+CREATE TABLE "multi_user_room" (
+  "room_alias" TEXT PRIMARY KEY,
+  "room_id" TEXT,
+  "conference" TEXT
+);
+
+CREATE TABLE "direct_room" (
+  "room_id" TEXT PRIMARY KEY,
+  "matrix_user" TEXT,
+  "xmpp_user" TEXT
 );
 
 CREATE TABLE "inviters" (
-  "room_id" VARCHAR(255) NOT NULL,
-  "user_id" VARCHAR(255) NOT NULL,
-  PRIMARY KEY ("room_id")
+  "room_id" VARCHAR(255) PRIMARY KEY,
+  "user_id" VARCHAR(255) NOT NULL
 );

@@ -22,6 +22,8 @@ public class MatrixConfig {
 
     private Cert ssl;
 
+    private String homeserver;
+
     public String getUrl() {
         return url;
     }
@@ -68,5 +70,13 @@ public class MatrixConfig {
 
     public void setSsl(Cert ssl) {
         this.ssl = ssl;
+    }
+
+    public String getHomeserver() {
+        return homeserver;
+    }
+
+    public void setHomeserver(String homeserver) {
+        this.homeserver = homeserver;
     }
 }

@@ -17,6 +17,7 @@
 package io.github.ma1uta.mjjb.matrix;
 
 import io.github.ma1uta.mjjb.Loggers;
+import io.github.ma1uta.mjjb.Transport;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.LoggerFactory;
@@ -34,8 +35,8 @@ public class MatrixEndPoints extends Application {
 
     private final Set<Object> resources = new HashSet<>();
 
-    public MatrixEndPoints(Jdbi jdbi, MatrixConfig config) {
-        MatrixAppResource appResource = new MatrixAppResource(jdbi);
+    public MatrixEndPoints(Jdbi jdbi, MatrixConfig config, Transport transport) {
+        MatrixAppResource appResource = new MatrixAppResource(jdbi, transport);
         resources.add(appResource);
         resources.add(new LegacyMatrixAppResource(appResource));
         resources.add(new SecurityContextFilter(config.getAsToken()));

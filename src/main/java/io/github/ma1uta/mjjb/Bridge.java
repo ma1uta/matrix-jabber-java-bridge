@@ -2,6 +2,8 @@ package io.github.ma1uta.mjjb;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.ma1uta.matrix.client.MatrixClient;
+import io.github.ma1uta.matrix.client.factory.jaxrs.JaxRsRequestFactory;
 import io.github.ma1uta.mjjb.config.AppConfig;
 import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.DatabaseConfig;
@@ -41,8 +43,10 @@ public class Bridge {
     public void run(AppConfig config) {
         initDatabase(config.getDatabase());
 
-        initMatrix(config.getMatrix());
-        initXmpp(config.getXmpp());
+        Transport transport = initTransport(config);
+
+        initMatrix(config.getMatrix(), transport);
+        initXmpp(config.getXmpp(), transport);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
@@ -53,6 +57,10 @@ public class Bridge {
             }
             dataSource.close();
         }));
+    }
+
+    private Transport initTransport(AppConfig config) {
+        return new Transport(config, jdbi, new MatrixClient(new JaxRsRequestFactory(config.getMatrix().getHomeserver())));
     }
 
     private void initDatabase(DatabaseConfig config) {
@@ -67,7 +75,7 @@ public class Bridge {
         jdbi = Jdbi.create(dataSource);
     }
 
-    private void initMatrix(MatrixConfig config) {
+    private void initMatrix(MatrixConfig config, Transport transport) {
         SslContext nettyContext = null;
         Cert cert = config.getSsl();
         if (cert != null) {
@@ -80,13 +88,13 @@ public class Bridge {
 
         URI uri = URI.create(config.getUrl());
 
-        NettyHttpContainer container = new NettyHttpContainer(new MatrixEndPoints(this.jdbi, config));
+        NettyHttpContainer container = new NettyHttpContainer(new MatrixEndPoints(this.jdbi, config, transport));
         JerseyServerInitializer initializer = new JerseyServerInitializer(uri, nettyContext, container);
         matrixChannel = NettyBuilder.createServer(uri.getHost(), NettyBuilder.getPort(uri), initializer,
             f -> container.getApplicationHandler().onShutdown(container));
     }
 
-    private void initXmpp(XmppConfig config) {
+    private void initXmpp(XmppConfig config, Transport transport) {
         SSLContext javaContext = null;
         Cert cert = config.getSsl();
         if (cert != null) {
@@ -100,5 +108,6 @@ public class Bridge {
         this.xmppServer = new XmppServer(config, javaContext);
         XmppServerInitializer initializer = new XmppServerInitializer(this.xmppServer);
         xmppChannel = NettyBuilder.createServer(config.getDomain(), config.getPort(), initializer, f -> this.xmppServer.close());
+        transport.setXmppServer(xmppServer);
     }
 }
