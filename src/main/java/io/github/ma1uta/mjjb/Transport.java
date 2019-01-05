@@ -112,7 +112,7 @@ public class Transport {
                 LOGGER.error(String.format("Failed create new user: %s", userId), exc);
                 throw new MatrixException(ErrorResponse.Code.M_UNKNOWN, exc.getMessage());
             }
-            getJdbi().useTransaction(h -> h.attach(UserDao.class).create(Id.getInstance().localpart(resp.getUserId())));
+            getJdbi().useExtension(UserDao.class, dao -> dao.create(Id.getInstance().localpart(resp.getUserId())));
         }).join();
     }
 
@@ -123,9 +123,7 @@ public class Transport {
     private void processMessageEvent(RoomMessage<?> roomMessage) {
         BiFunction<Jid, RoomMessage, Message> converter = getConverter(roomMessage.getContent().getClass());
         if (converter != null) {
-            getJdbi().useTransaction(h -> {
-                RoomDao roomDao = h.attach(RoomDao.class);
-
+            getJdbi().useExtension(RoomDao.class, roomDao -> {
                 DirectRoom room = roomDao.findDirectRoom(roomMessage.getRoomId());
                 if (room != null) {
                     ServerMessage xmppMessage = ServerMessage.from(converter.apply(room.getXmppJid(), roomMessage));

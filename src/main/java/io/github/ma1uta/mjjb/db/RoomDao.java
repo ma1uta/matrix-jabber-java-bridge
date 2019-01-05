@@ -21,7 +21,7 @@ import org.jdbi.v3.sqlobject.statement.SqlQuery;
 
 public interface RoomDao {
 
-    @SqlQuery("select * from direct_room where room_id = ?")
+    @SqlQuery("select * from direct_room where room_id = :roomId")
     @RegisterRowMapper(DirectRoomMapper.class)
     DirectRoom findDirectRoom(String roomId);
 }

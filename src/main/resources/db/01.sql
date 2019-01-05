@@ -4,6 +4,7 @@ CREATE TABLE "app_user" (
 
 CREATE TABLE "transaction" (
   "id" TEXT PRIMARY KEY,
+  "started" TIMESTAMP WITH TIMEZONE,
   "processed" TIMESTAMP WITH TIMEZONE
 );
 

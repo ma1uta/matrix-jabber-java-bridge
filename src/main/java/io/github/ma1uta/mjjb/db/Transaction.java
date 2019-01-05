@@ -16,10 +16,37 @@
 
 package io.github.ma1uta.mjjb.db;
 
-import org.jdbi.v3.sqlobject.statement.SqlUpdate;
+import java.time.LocalDateTime;
 
-public interface UserDao {
+public class Transaction {
 
-    @SqlUpdate("insert into app_user(localpart) values(:localpart)")
-    void create(String localpart);
+    private String id;
+
+    private LocalDateTime started;
+
+    private LocalDateTime processed;
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public LocalDateTime getStarted() {
+        return started;
+    }
+
+    public void setStarted(LocalDateTime started) {
+        this.started = started;
+    }
+
+    public LocalDateTime getProcessed() {
+        return processed;
+    }
+
+    public void setProcessed(LocalDateTime processed) {
+        this.processed = processed;
+    }
 }

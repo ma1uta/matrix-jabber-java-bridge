@@ -16,10 +16,19 @@
 
 package io.github.ma1uta.mjjb.db;
 
+import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
-public interface UserDao {
+import java.time.LocalDateTime;
 
-    @SqlUpdate("insert into app_user(localpart) values(:localpart)")
-    void create(String localpart);
+public interface TransactionDao {
+
+    @SqlQuery("select count(*) from transaction where id = :txnId")
+    int exist(String txnId);
+
+    @SqlUpdate("insert into transaction(id, started) values(:txnId, :started)")
+    void start(String txnId, LocalDateTime started);
+
+    @SqlUpdate("update transaction set processed = :processed where id = :txnId")
+    void finish(String txnid, LocalDateTime processed);
 }

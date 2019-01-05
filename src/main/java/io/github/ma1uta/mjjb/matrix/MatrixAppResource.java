@@ -19,10 +19,12 @@ package io.github.ma1uta.mjjb.matrix;
 import io.github.ma1uta.matrix.application.api.ApplicationApi;
 import io.github.ma1uta.matrix.application.model.TransactionRequest;
 import io.github.ma1uta.mjjb.Transport;
+import io.github.ma1uta.mjjb.db.TransactionDao;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
 import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
@@ -51,10 +53,35 @@ public class MatrixAppResource implements ApplicationApi {
         return transport;
     }
 
+    public Jdbi getJdbi() {
+        return jdbi;
+    }
+
     @Override
     public void transaction(String txnId, TransactionRequest request, UriInfo uriInfo, HttpHeaders httpHeaders,
-                            AsyncResponse asyncResponse) {
-        asyncResponse.resume(Response.ok().build());
+                            @Suspended AsyncResponse asyncResponse) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                getJdbi().useExtension(TransactionDao.class, dao -> {
+                    if (dao.exist(txnId) == 0) {
+                        dao.start(txnId, LocalDateTime.now());
+
+                        request.getEvents().parallelStream().forEach(event -> {
+                            try {
+                                getTransport().process(event);
+                            } catch (Exception e) {
+                                LOGGER.error("Failed process event.", e);
+                            }
+                        });
+
+                        dao.finish(txnId, LocalDateTime.now());
+                    }
+                });
+            } catch (Exception e) {
+                LOGGER.error(String.format("Failed process transaction %s", txnId));
+            }
+            asyncResponse.resume(Response.ok().build());
+        });
     }
 
     @Override
