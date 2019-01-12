@@ -16,6 +16,8 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
+import io.github.ma1uta.mjjb.xmpp.IncomingSession;
+import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;

@@ -14,9 +14,16 @@
  * limitations under the License.
  */
 
-package io.github.ma1uta.mjjb.xmpp.netty;
+package io.github.ma1uta.mjjb.xmpp;
 
+import io.github.ma1uta.mjjb.NetworkServer;
+import io.github.ma1uta.mjjb.RouterFactory;
+import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.XmppConfig;
+import io.github.ma1uta.mjjb.netty.NettyBuilder;
+import io.github.ma1uta.mjjb.xmpp.netty.XmppServerInitializer;
+import io.netty.channel.Channel;
+import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
@@ -35,15 +42,16 @@ import javax.xml.bind.JAXBException;
 /**
  * XMPP server with S2S support.
  */
-public class XmppServer implements AutoCloseable {
+public class XmppServer implements NetworkServer<XmppConfig> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(XmppServer.class);
 
     private final Set<IncomingSession> initialIncomingSessions = new HashSet<>();
     private final Map<Jid, IncomingSession> establishedIncomingSessions = new HashMap<>();
     private final Map<Jid, OutgoingSession> establishedOutgoingSessions = new HashMap<>();
-    private final XmppConfig config;
-    private final SSLContext sslContext;
+    private XmppConfig config;
+    private SSLContext sslContext;
+    private Channel channel;
     private final ConnectionConfiguration connectionConfig = new ConnectionConfiguration() {
         @Override
         public ChannelEncryption getChannelEncryption() {
@@ -60,11 +68,6 @@ public class XmppServer implements AutoCloseable {
             }
         }
     };
-
-    public XmppServer(XmppConfig config, SSLContext sslContext) {
-        this.config = config;
-        this.sslContext = sslContext;
-    }
 
     /**
      * Create new incoming session.
@@ -122,7 +125,7 @@ public class XmppServer implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public void close() throws Exception {
         getInitialIncomingSessions().forEach(s -> {
             try {
                 s.close();
@@ -144,6 +147,7 @@ public class XmppServer implements AutoCloseable {
                 LOGGER.error("Failed close connection to " + jid.toString(), e);
             }
         });
+        this.channel.close().sync();
     }
 
     /**
@@ -166,5 +170,23 @@ public class XmppServer implements AutoCloseable {
 
     private void send0(OutgoingSession outgoingSession, Message message) {
         outgoingSession.getConnection().send(message);
+    }
+
+    @Override
+    public void init(Jdbi jdbi, XmppConfig config, RouterFactory routerFactory) {
+        this.config = config;
+        Cert cert = config.getSsl();
+        if (cert != null) {
+            try {
+                this.sslContext = cert.createJavaContext();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    @Override
+    public void run() {
+        this.channel = NettyBuilder.createServer(config.getDomain(), config.getPort(), new XmppServerInitializer(this), null);
     }
 }

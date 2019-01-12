@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.ma1uta.mjjb.converter;
+package io.github.ma1uta.mjjb.matrix.converter;
 
 import io.github.ma1uta.matrix.event.RoomMessage;
 import io.github.ma1uta.matrix.event.message.Text;

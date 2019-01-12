@@ -16,11 +16,26 @@
 
 package io.github.ma1uta.mjjb;
 
-public class Loggers {
+import org.jdbi.v3.core.Jdbi;
 
-    public static final String REQUEST_LOGGER = "REQUEST_LOGGER";
+/**
+ * Network implementation.
+ *
+ * @param <C> config class
+ */
+public interface NetworkServer<C> extends AutoCloseable {
 
-    public static final String STANZA_LOGGER = "STANZA_LOGGER";
+    /**
+     * Initialize protocol.
+     *
+     * @param jdbi          database point.
+     * @param config        configuration.
+     * @param routerFactory router factory.
+     */
+    void init(Jdbi jdbi, C config, RouterFactory routerFactory);
 
-    public static final String LOGGER = "LOGGER";
+    /**
+     * Run the server.
+     */
+    void run();
 }

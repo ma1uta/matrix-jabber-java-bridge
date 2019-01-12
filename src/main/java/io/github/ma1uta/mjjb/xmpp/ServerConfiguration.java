@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.ma1uta.mjjb.xmpp.netty;
+package io.github.ma1uta.mjjb.xmpp;
 
 import rocks.xmpp.core.bind.model.Bind;
 import rocks.xmpp.core.sasl.model.Mechanisms;

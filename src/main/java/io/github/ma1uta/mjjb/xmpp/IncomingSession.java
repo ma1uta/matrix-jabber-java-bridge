@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.github.ma1uta.mjjb.xmpp.netty;
+package io.github.ma1uta.mjjb.xmpp;
 
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stream.model.StreamFeatures;

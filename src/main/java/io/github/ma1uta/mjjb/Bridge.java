@@ -2,33 +2,20 @@ package io.github.ma1uta.mjjb;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import io.github.ma1uta.matrix.client.MatrixClient;
-import io.github.ma1uta.matrix.client.factory.jaxrs.JaxRsRequestFactory;
 import io.github.ma1uta.mjjb.config.AppConfig;
-import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.DatabaseConfig;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.config.XmppConfig;
-import io.github.ma1uta.mjjb.matrix.MatrixEndPoints;
-import io.github.ma1uta.mjjb.matrix.netty.JerseyServerInitializer;
-import io.github.ma1uta.mjjb.matrix.netty.NettyHttpContainer;
-import io.github.ma1uta.mjjb.netty.NettyBuilder;
-import io.github.ma1uta.mjjb.xmpp.netty.XmppServer;
-import io.github.ma1uta.mjjb.xmpp.netty.XmppServerInitializer;
-import io.netty.channel.Channel;
-import io.netty.handler.ssl.SslContext;
+import io.github.ma1uta.mjjb.matrix.MatrixServer;
+import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import org.jdbi.v3.core.Jdbi;
-
-import java.net.URI;
-import javax.net.ssl.SSLContext;
 
 /**
  * Matrix-XMPP bridge.
  */
 public class Bridge {
 
-    private Channel matrixChannel;
-    private Channel xmppChannel;
+    private MatrixServer matrixServer;
     private XmppServer xmppServer;
 
     private HikariDataSource dataSource;
@@ -43,24 +30,27 @@ public class Bridge {
     public void run(AppConfig config) {
         initDatabase(config.getDatabase());
 
-        Transport transport = initTransport(config);
+        RouterFactory routerFactory = initRouters(config);
 
-        initMatrix(config.getMatrix(), transport);
-        initXmpp(config.getXmpp(), transport);
+        initMatrix(config.getMatrix(), routerFactory);
+        initXmpp(config.getXmpp(), routerFactory);
+
+        this.matrixServer.run();
+        this.xmppServer.run();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                matrixChannel.close().sync();
-                xmppChannel.close().sync();
-            } catch (InterruptedException e) {
+                this.matrixServer.close();
+                this.xmppServer.close();
+            } catch (Exception e) {
                 e.printStackTrace();
             }
             dataSource.close();
         }));
     }
 
-    private Transport initTransport(AppConfig config) {
-        return new Transport(config, jdbi, new MatrixClient(new JaxRsRequestFactory(config.getMatrix().getHomeserver())));
+    private RouterFactory initRouters(AppConfig config) {
+        return new RouterFactory(config, jdbi);
     }
 
     private void initDatabase(DatabaseConfig config) {
@@ -75,39 +65,13 @@ public class Bridge {
         jdbi = Jdbi.create(dataSource);
     }
 
-    private void initMatrix(MatrixConfig config, Transport transport) {
-        SslContext nettyContext = null;
-        Cert cert = config.getSsl();
-        if (cert != null) {
-            try {
-                nettyContext = cert.createNettyContext();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        URI uri = URI.create(config.getUrl());
-
-        NettyHttpContainer container = new NettyHttpContainer(new MatrixEndPoints(this.jdbi, config, transport));
-        JerseyServerInitializer initializer = new JerseyServerInitializer(uri, nettyContext, container);
-        matrixChannel = NettyBuilder.createServer(uri.getHost(), NettyBuilder.getPort(uri), initializer,
-            f -> container.getApplicationHandler().onShutdown(container));
+    private void initMatrix(MatrixConfig config, RouterFactory routerFactory) {
+        this.matrixServer = new MatrixServer();
+        this.matrixServer.init(jdbi, config, routerFactory);
     }
 
-    private void initXmpp(XmppConfig config, Transport transport) {
-        SSLContext javaContext = null;
-        Cert cert = config.getSsl();
-        if (cert != null) {
-            try {
-                javaContext = cert.createJavaContext();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        this.xmppServer = new XmppServer(config, javaContext);
-        XmppServerInitializer initializer = new XmppServerInitializer(this.xmppServer);
-        xmppChannel = NettyBuilder.createServer(config.getDomain(), config.getPort(), initializer, f -> this.xmppServer.close());
-        transport.setXmppServer(xmppServer);
+    private void initXmpp(XmppConfig config, RouterFactory routerFactory) {
+        this.xmppServer = new XmppServer();
+        this.xmppServer.init(jdbi, config, routerFactory);
     }
 }

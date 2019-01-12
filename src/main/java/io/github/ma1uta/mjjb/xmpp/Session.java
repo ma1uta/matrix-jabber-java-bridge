@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-package io.github.ma1uta.mjjb.xmpp.netty;
+package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.Loggers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.net.Connection;
 import rocks.xmpp.core.stream.StreamNegotiationResult;
 import rocks.xmpp.core.stream.model.StreamElement;
 import rocks.xmpp.core.stream.server.ServerStreamFeaturesManager;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -37,7 +37,7 @@ public class Session implements AutoCloseable {
     protected static final Logger LOGGER = LoggerFactory.getLogger(Session.class);
     protected static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
 
-    private NettyChannelConnection connection;
+    private Connection connection;
     private final Unmarshaller unmarshaller;
     private final Marshaller marshaller;
     private final ServerStreamFeaturesManager streamFeaturesManager = new ServerStreamFeaturesManager();
@@ -116,11 +116,11 @@ public class Session implements AutoCloseable {
         return streamFeaturesManager;
     }
 
-    public NettyChannelConnection getConnection() {
+    public Connection getConnection() {
         return connection;
     }
 
-    public void setConnection(NettyChannelConnection connection) {
+    public void setConnection(Connection connection) {
         this.connection = connection;
     }
 
