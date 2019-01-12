@@ -51,9 +51,11 @@ public class RouterFactory {
     }
 
     @SuppressWarnings("unchecked")
-    public void addMatrixRouter(AbstractRouter<? extends Event> router) {
-        Class<?> key = (Class<?>) ((ParameterizedType) router.getClass().getGenericSuperclass()).getActualTypeArguments()[0];
-        getMatrixRouters().put(key, (AbstractRouter<Event>) router);
+    public void addMatrixRouter(AbstractRouter<? extends Event>... routers) {
+        for (AbstractRouter<? extends Event> router : routers) {
+            Class<?> key = (Class<?>) ((ParameterizedType) router.getClass().getGenericSuperclass()).getActualTypeArguments()[0];
+            getMatrixRouters().put(key, (AbstractRouter<Event>) router);
+        }
     }
 
     public MultiValuedMap<Class, AbstractRouter<Event>> getMatrixRouters() {

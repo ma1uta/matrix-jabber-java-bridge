@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.net.ConnectionConfiguration;
-import rocks.xmpp.core.stanza.model.Message;
+import rocks.xmpp.core.stanza.model.Stanza;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
@@ -157,7 +157,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      *
      * @param message outgoing stanza.
      */
-    public void send(Message message) {
+    public void send(Stanza message) {
         OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(message.getTo());
         if (outgoingSession != null) {
             send0(outgoingSession, message);
@@ -170,7 +170,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         }
     }
 
-    private void send0(OutgoingSession outgoingSession, Message message) {
+    private void send0(OutgoingSession outgoingSession, Stanza message) {
         outgoingSession.getConnection().send(message);
     }
 

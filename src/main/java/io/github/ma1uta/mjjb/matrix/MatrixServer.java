@@ -29,6 +29,7 @@ import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.matrix.converter.TextConverter;
 import io.github.ma1uta.mjjb.matrix.netty.JerseyServerInitializer;
 import io.github.ma1uta.mjjb.matrix.netty.NettyHttpContainer;
+import io.github.ma1uta.mjjb.matrix.router.DirectInviteRouter;
 import io.github.ma1uta.mjjb.matrix.router.MessageRouter;
 import io.github.ma1uta.mjjb.netty.NettyBuilder;
 import io.netty.channel.Channel;
@@ -103,7 +104,7 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         messageConverters.put(Text.class, new TextConverter());
         MessageRouter router = new MessageRouter();
         router.setConverters(messageConverters);
-        routerFactory.addMatrixRouter(router);
+        routerFactory.addMatrixRouter(router, new DirectInviteRouter());
     }
 
     @Override
