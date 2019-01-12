@@ -18,22 +18,32 @@ package io.github.ma1uta.mjjb.matrix;
 
 import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.factory.jaxrs.AppJaxRsRequestFactory;
+import io.github.ma1uta.matrix.event.RoomMessage;
+import io.github.ma1uta.matrix.event.content.RoomMessageContent;
+import io.github.ma1uta.matrix.event.message.Text;
 import io.github.ma1uta.mjjb.Loggers;
 import io.github.ma1uta.mjjb.NetworkServer;
 import io.github.ma1uta.mjjb.RouterFactory;
 import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
+import io.github.ma1uta.mjjb.matrix.converter.TextConverter;
 import io.github.ma1uta.mjjb.matrix.netty.JerseyServerInitializer;
 import io.github.ma1uta.mjjb.matrix.netty.NettyHttpContainer;
+import io.github.ma1uta.mjjb.matrix.router.MessageRouter;
 import io.github.ma1uta.mjjb.netty.NettyBuilder;
 import io.netty.channel.Channel;
 import io.netty.handler.ssl.SslContext;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.LoggerFactory;
+import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.stanza.model.Message;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 /**
  * All Matrix endpoints.
@@ -59,6 +69,12 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
             .accessToken(config.getAsToken())
             .build();
 
+        initRestAPI();
+        initSSL();
+        initRouters();
+    }
+
+    private void initRestAPI() {
         MatrixAppResource appResource = new MatrixAppResource(jdbi, routerFactory, matrixClient);
         Set<Object> resources = new HashSet<>();
         resources.add(appResource);
@@ -69,7 +85,9 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
             resources.add(new LoggingFilter());
         }
         this.matrixApp = new MatrixApp(resources);
+    }
 
+    private void initSSL() {
         Cert cert = config.getSsl();
         if (cert != null) {
             try {
@@ -80,12 +98,20 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         }
     }
 
+    private void initRouters() {
+        Map<Class<? extends RoomMessageContent>, BiFunction<Jid, RoomMessage<?>, Message>> messageConverters = new HashMap<>();
+        messageConverters.put(Text.class, new TextConverter());
+        MessageRouter router = new MessageRouter();
+        router.setConverters(messageConverters);
+        routerFactory.addMatrixRouter(router);
+    }
+
     @Override
     public void run() {
         URI uri = URI.create(getConfig().getUrl());
 
-        NettyHttpContainer container = new NettyHttpContainer(this.matrixApp);
-        JerseyServerInitializer initializer = new JerseyServerInitializer(uri, getSslContext(), container);
+        NettyHttpContainer container = new NettyHttpContainer(matrixApp);
+        JerseyServerInitializer initializer = new JerseyServerInitializer(uri, sslContext, container);
         this.channel = NettyBuilder.createServer(uri.getHost(), NettyBuilder.getPort(uri), initializer,
             f -> container.getApplicationHandler().onShutdown(container));
     }
@@ -97,10 +123,6 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
 
     public MatrixConfig getConfig() {
         return config;
-    }
-
-    public SslContext getSslContext() {
-        return sslContext;
     }
 
     public MatrixClient getMatrixClient() {

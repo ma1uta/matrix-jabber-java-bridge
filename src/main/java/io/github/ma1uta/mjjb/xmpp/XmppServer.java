@@ -49,7 +49,9 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     private final Set<IncomingSession> initialIncomingSessions = new HashSet<>();
     private final Map<Jid, IncomingSession> establishedIncomingSessions = new HashMap<>();
     private final Map<Jid, OutgoingSession> establishedOutgoingSessions = new HashMap<>();
+    private Jdbi jdbi;
     private XmppConfig config;
+    private RouterFactory routerFactory;
     private SSLContext sslContext;
     private Channel channel;
     private final ConnectionConfiguration connectionConfig = new ConnectionConfiguration() {
@@ -174,7 +176,14 @@ public class XmppServer implements NetworkServer<XmppConfig> {
 
     @Override
     public void init(Jdbi jdbi, XmppConfig config, RouterFactory routerFactory) {
+        this.jdbi = jdbi;
         this.config = config;
+        this.routerFactory = routerFactory;
+        initSSL(config);
+        initRouters();
+    }
+
+    private void initSSL(XmppConfig config) {
         Cert cert = config.getSsl();
         if (cert != null) {
             try {
@@ -183,6 +192,10 @@ public class XmppServer implements NetworkServer<XmppConfig> {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private void initRouters() {
+
     }
 
     @Override

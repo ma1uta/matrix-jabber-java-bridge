@@ -74,7 +74,8 @@ public class MatrixAppResource implements ApplicationApi {
                             @Suspended AsyncResponse asyncResponse) {
         CompletableFuture.runAsync(() -> {
             try {
-                getJdbi().useExtension(TransactionDao.class, dao -> {
+                getJdbi().useTransaction(h -> {
+                    TransactionDao dao = h.attach(TransactionDao.class);
                     if (dao.exist(txnId) == 0) {
                         dao.start(txnId, LocalDateTime.now());
 
@@ -125,7 +126,7 @@ public class MatrixAppResource implements ApplicationApi {
                 LOGGER.error(String.format("Failed create new user: %s", userId), exc);
                 throw new MatrixException(ErrorResponse.Code.M_UNKNOWN, exc.getMessage());
             }
-            getJdbi().useExtension(UserDao.class, dao -> dao.create(Id.getInstance().localpart(resp.getUserId())));
+            getJdbi().useTransaction(h -> h.attach(UserDao.class).create(Id.getInstance().localpart(resp.getUserId())));
         }).join();
     }
 }

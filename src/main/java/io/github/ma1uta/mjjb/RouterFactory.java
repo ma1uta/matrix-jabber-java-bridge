@@ -18,7 +18,6 @@ package io.github.ma1uta.mjjb;
 
 import io.github.ma1uta.matrix.event.Event;
 import io.github.ma1uta.mjjb.config.AppConfig;
-import io.github.ma1uta.mjjb.matrix.MatrixServer;
 import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.jdbi.v3.core.Jdbi;
@@ -35,8 +34,8 @@ public class RouterFactory {
     private final AppConfig config;
     private final Jdbi jdbi;
 
-    private MultiValuedMap<Class<?>, AbstractRouter<Event<?>>> matrixRouters = new ArrayListValuedHashMap<>();
-    private MultiValuedMap<Class<?>, AbstractRouter<Stanza>> xmppRouters = new ArrayListValuedHashMap<>();
+    private MultiValuedMap<Class, AbstractRouter<Event>> matrixRouters = new ArrayListValuedHashMap<>();
+    private MultiValuedMap<Class, AbstractRouter<Stanza>> xmppRouters = new ArrayListValuedHashMap<>();
 
     public RouterFactory(AppConfig config, Jdbi jdbi) {
         this.config = config;
@@ -51,26 +50,28 @@ public class RouterFactory {
         return jdbi;
     }
 
-    public void addMatrixRouter(AbstractRouter<Event<?>> router) {
+    @SuppressWarnings("unchecked")
+    public void addMatrixRouter(AbstractRouter<? extends Event> router) {
         Class<?> key = (Class<?>) ((ParameterizedType) router.getClass().getGenericSuperclass()).getActualTypeArguments()[0];
-        getMatrixRouters().put(key, router);
+        getMatrixRouters().put(key, (AbstractRouter<Event>) router);
     }
 
-    public MultiValuedMap<Class<?>, AbstractRouter<Event<?>>> getMatrixRouters() {
+    public MultiValuedMap<Class, AbstractRouter<Event>> getMatrixRouters() {
         return matrixRouters;
     }
 
-    public void addXmppRouter(AbstractRouter<Stanza> router) {
+    @SuppressWarnings("unchecked")
+    public void addXmppRouter(AbstractRouter<? extends Stanza> router) {
         Class<?> key = (Class<?>) ((ParameterizedType) router.getClass().getGenericSuperclass()).getActualTypeArguments()[0];
-        getXmppRouters().put(key, router);
+        getXmppRouters().put(key, (AbstractRouter<Stanza>) router);
     }
 
-    public MultiValuedMap<Class<?>, AbstractRouter<Stanza>> getXmppRouters() {
+    public MultiValuedMap<Class, AbstractRouter<Stanza>> getXmppRouters() {
         return xmppRouters;
     }
 
-    public void process(Event<?> event) {
-        for (AbstractRouter<Event<?>> router : getMatrixRouters().get(event.getClass())) {
+    public void process(Event event) {
+        for (AbstractRouter<Event> router : getMatrixRouters().get(event.getClass())) {
             if (router.apply(event)) {
                 break;
             }

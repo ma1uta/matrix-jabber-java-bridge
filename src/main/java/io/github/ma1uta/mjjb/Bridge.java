@@ -35,6 +35,13 @@ public class Bridge {
         initMatrix(config.getMatrix(), routerFactory);
         initXmpp(config.getXmpp(), routerFactory);
 
+        for (AbstractRouter<?> router : routerFactory.getXmppRouters().values()) {
+            router.init(jdbi, xmppServer, matrixServer);
+        }
+        for (AbstractRouter<?> router : routerFactory.getMatrixRouters().values()) {
+            router.init(jdbi, xmppServer, matrixServer);
+        }
+
         this.matrixServer.run();
         this.xmppServer.run();
 

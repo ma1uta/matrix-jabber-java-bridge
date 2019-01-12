@@ -17,16 +17,15 @@
 package io.github.ma1uta.mjjb.matrix.converter;
 
 import io.github.ma1uta.matrix.event.RoomMessage;
-import io.github.ma1uta.matrix.event.message.Text;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stanza.model.Message;
 
 import java.util.function.BiFunction;
 
-public class TextConverter implements BiFunction<Jid, RoomMessage<Text>, Message> {
+public class TextConverter implements BiFunction<Jid, RoomMessage<?>, Message> {
 
     @Override
-    public Message apply(Jid jid, RoomMessage<Text> message) {
+    public Message apply(Jid jid, RoomMessage<?> message) {
         return new Message(jid, Message.Type.CHAT, message.getContent().getBody());
     }
 }

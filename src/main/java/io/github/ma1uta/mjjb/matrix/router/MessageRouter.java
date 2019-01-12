@@ -16,15 +16,11 @@
 
 package io.github.ma1uta.mjjb.matrix.router;
 
-import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.event.RoomMessage;
 import io.github.ma1uta.matrix.event.content.RoomMessageContent;
 import io.github.ma1uta.mjjb.AbstractRouter;
-import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.db.DirectRoom;
 import io.github.ma1uta.mjjb.db.RoomDao;
-import io.github.ma1uta.mjjb.xmpp.XmppServer;
-import org.jdbi.v3.core.Jdbi;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stanza.model.Message;
 import rocks.xmpp.core.stanza.model.server.ServerMessage;
@@ -38,34 +34,35 @@ import java.util.function.BiFunction;
  */
 public class MessageRouter extends AbstractRouter<RoomMessage<?>> {
 
-    private final Map<Class<? extends RoomMessageContent>, BiFunction<Jid, RoomMessage, Message>> converters = new HashMap<>();
+    private Map<Class<? extends RoomMessageContent>, BiFunction<Jid, RoomMessage<?>, Message>> converters = new HashMap<>();
 
-    public MessageRouter(Jdbi jdbi, XmppServer xmppServer, MatrixConfig matrixConfig, MatrixClient matrixClient,
-                         Map<Class<? extends RoomMessageContent>, BiFunction<Jid, RoomMessage, Message>> converters) {
-        super(jdbi, xmppServer, matrixConfig, matrixClient);
-        this.converters.putAll(converters);
+    public BiFunction<Jid, RoomMessage<?>, Message> getConverter(Class<? extends RoomMessageContent> key) {
+        return converters.get(key);
     }
 
-    public BiFunction<Jid, RoomMessage, Message> getConverter(Class<? extends RoomMessageContent> key) {
-        return converters.get(key);
+    public void setConverters(Map<Class<? extends RoomMessageContent>, BiFunction<Jid, RoomMessage<?>, Message>> converters) {
+        this.converters = converters;
     }
 
     @Override
     public Boolean apply(RoomMessage<?> message) {
-        BiFunction<Jid, RoomMessage, Message> converter = getConverter(message.getContent().getClass());
-        if (converter != null) {
-            getJdbi().useExtension(RoomDao.class, roomDao -> {
-                DirectRoom room = roomDao.findDirectRoom(message.getRoomId());
-                if (room != null) {
-                    ServerMessage xmppMessage = ServerMessage.from(converter.apply(room.getXmppJid(), message));
-                    xmppMessage.setFrom(mxidToJid(message.getSender()));
-
-                    getXmppServer().send(xmppMessage);
-                } else {
-                    //TODO not found room. Create new one?
-                }
-            });
+        BiFunction<Jid, RoomMessage<?>, Message> converter = getConverter(message.getContent().getClass());
+        if (converter == null) {
+            return false;
         }
-        return null;
+
+        return getJdbi().inTransaction(h -> {
+            RoomDao roomDao = h.attach(RoomDao.class);
+            DirectRoom room = roomDao.findDirectRoom(message.getRoomId());
+            if (room == null) {
+                return false;
+            }
+
+            ServerMessage xmppMessage = ServerMessage.from(converter.apply(room.getXmppJid(), message));
+            xmppMessage.setFrom(mxidToJid(message.getSender()));
+
+            getXmppServer().send(xmppMessage);
+            return true;
+        });
     }
 }

@@ -18,6 +18,7 @@ package io.github.ma1uta.mjjb;
 
 import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
+import io.github.ma1uta.mjjb.matrix.MatrixServer;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
@@ -39,15 +40,7 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
 
     private Jdbi jdbi;
     private XmppServer xmppServer;
-    private MatrixConfig matrixConfig;
-    private MatrixClient matrixClient;
-
-    public AbstractRouter(Jdbi jdbi, XmppServer xmppServer, MatrixConfig matrixConfig, MatrixClient matrixClient) {
-        this.jdbi = jdbi;
-        this.xmppServer = xmppServer;
-        this.matrixConfig = matrixConfig;
-        this.matrixClient = matrixClient;
-    }
+    private MatrixServer matrixServer;
 
     public Jdbi getJdbi() {
         return jdbi;
@@ -57,16 +50,18 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
         return xmppServer;
     }
 
-    public MatrixConfig getMatrixConfig() {
-        return matrixConfig;
+    public MatrixServer getMatrixServer() {
+        return matrixServer;
     }
 
-    public MatrixClient getMatrixClient() {
-        return matrixClient;
+    public void init(Jdbi jdbi, XmppServer xmppServer, MatrixServer matrixServer) {
+        this.jdbi = jdbi;
+        this.xmppServer = xmppServer;
+        this.matrixServer = matrixServer;
     }
 
     public Jid mxidToJid(String mxid) {
-        String prefix = getMatrixConfig().getPrefix();
+        String prefix = getMatrixServer().getConfig().getPrefix();
         String domain = getXmppServer().getConfig().getDomain();
         try {
             return Jid.of(prefix + URLEncoder.encode(mxid, "UTF-8") + "@" + domain);
