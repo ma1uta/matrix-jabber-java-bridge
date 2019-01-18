@@ -20,6 +20,8 @@ import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.event.RoomMember;
 import io.github.ma1uta.matrix.event.content.RoomMemberContent;
 import io.github.ma1uta.mjjb.AbstractRouter;
+import io.github.ma1uta.mjjb.db.DirectRoom;
+import io.github.ma1uta.mjjb.db.RoomDao;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stanza.model.Presence;
 import rocks.xmpp.core.stanza.model.server.ServerPresence;
@@ -45,9 +47,19 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
             return false;
         }
 
-        Presence presence = new Presence(Jid.of(mxidToJid(localpart)), Presence.Type.SUBSCRIBE, null);
-        getXmppServer().send(ServerPresence.from(presence));
+        return getJdbi().inTransaction(h -> {
+            RoomDao roomDao = h.attach(RoomDao.class);
+            String roomId = roomMember.getRoomId();
+            DirectRoom room = roomDao.findDirectRoom(roomId);
+            String jid = mxidToJid(localpart);
+            if (room == null) {
+                roomDao.createDirectRoom(roomId, roomMember.getSender(), jid);
+            }
+            roomDao.updateMatrixSubscription(roomId, true);
 
-        return true;
+            Presence presence = new Presence(Jid.of(jid), Presence.Type.SUBSCRIBE, null);
+            getXmppServer().send(ServerPresence.from(presence));
+            return true;
+        });
     }
 }

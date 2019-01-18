@@ -60,11 +60,11 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
         this.matrixServer = matrixServer;
     }
 
-    public Jid mxidToJid(String mxid) {
+    public String mxidToJid(String mxid) {
         String prefix = getMatrixServer().getConfig().getPrefix();
         String domain = getXmppServer().getConfig().getDomain();
         try {
-            return Jid.of(prefix + URLEncoder.encode(mxid, "UTF-8") + "@" + domain);
+            return prefix + URLEncoder.encode(mxid, "UTF-8") + "@" + domain;
         } catch (UnsupportedEncodingException e) {
             LOGGER.error("Your JRE doesn't have UTF-8 encoder", e);
             throw new RuntimeException(e);

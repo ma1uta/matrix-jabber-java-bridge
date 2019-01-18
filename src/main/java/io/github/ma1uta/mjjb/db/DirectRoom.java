@@ -28,6 +28,10 @@ public class DirectRoom {
 
     private String roomId;
 
+    private boolean matrixSubscribed;
+
+    private boolean xmppSubscribed;
+
     public String getMatrixUser() {
         return matrixUser;
     }
@@ -62,5 +66,21 @@ public class DirectRoom {
 
     public void setRoomId(String roomId) {
         this.roomId = roomId;
+    }
+
+    public boolean isMatrixSubscribed() {
+        return matrixSubscribed;
+    }
+
+    public void setMatrixSubscribed(boolean matrixSubscribed) {
+        this.matrixSubscribed = matrixSubscribed;
+    }
+
+    public boolean isXmppSubscribed() {
+        return xmppSubscribed;
+    }
+
+    public void setXmppSubscribed(boolean xmppSubscribed) {
+        this.xmppSubscribed = xmppSubscribed;
     }
 }
