@@ -16,6 +16,9 @@
 
 package io.github.ma1uta.mjjb.db;
 
+/**
+ * Multiuser chats.
+ */
 public class MultiUserRoom {
 
     private String roomId;

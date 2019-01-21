@@ -26,6 +26,9 @@ import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stanza.model.Presence;
 import rocks.xmpp.core.stanza.model.server.ServerPresence;
 
+/**
+ * Process incoming matrix invite requests.
+ */
 public class DirectInviteRouter extends AbstractRouter<RoomMember> {
 
     @Override
@@ -42,18 +45,18 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
         String prefix = getMatrixServer().getConfig().getPrefix();
         String invitedUser = roomMember.getStateKey();
 
-        String localpart = Id.getInstance().localpart(invitedUser);
+        String localpart = Id.valueOf(invitedUser).getLocalpart();
         if (!localpart.startsWith(prefix)) {
             return false;
         }
 
         return getJdbi().inTransaction(h -> {
             RoomDao roomDao = h.attach(RoomDao.class);
-            String roomId = roomMember.getRoomId();
+            String roomId = roomMember.getRoomId().toString();
             DirectRoom room = roomDao.findDirectRoom(roomId);
             String jid = mxidToJid(localpart);
             if (room == null) {
-                roomDao.createDirectRoom(roomId, roomMember.getSender(), jid);
+                roomDao.createDirectRoom(roomId, roomMember.getSender().toString(), jid);
             }
             roomDao.updateMatrixSubscription(roomId, true);
 

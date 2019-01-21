@@ -16,11 +16,19 @@
 
 package io.github.ma1uta.mjjb.config;
 
+/**
+ * XMPP side config.
+ */
 public class XmppConfig {
+
+    /**
+     * Default xmpp server-to-server port.
+     */
+    public static final int DEFAULT_S2S_PORT = 5269;
 
     private String domain = "localhost";
 
-    private int port = 5269;
+    private int port = DEFAULT_S2S_PORT;
 
     private Cert ssl;
 

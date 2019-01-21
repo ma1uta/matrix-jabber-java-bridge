@@ -16,14 +16,11 @@
 
 package io.github.ma1uta.mjjb;
 
-import io.github.ma1uta.matrix.client.MatrixClient;
-import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.matrix.MatrixServer;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import rocks.xmpp.addr.Jid;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -54,12 +51,25 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
         return matrixServer;
     }
 
+    /**
+     * Init router.
+     *
+     * @param jdbi         persistence service.
+     * @param xmppServer   xmpp server.
+     * @param matrixServer matrix server.
+     */
     public void init(Jdbi jdbi, XmppServer xmppServer, MatrixServer matrixServer) {
         this.jdbi = jdbi;
         this.xmppServer = xmppServer;
         this.matrixServer = matrixServer;
     }
 
+    /**
+     * Map MXID to JID.
+     *
+     * @param mxid MXID.
+     * @return JID.
+     */
     public String mxidToJid(String mxid) {
         String prefix = getMatrixServer().getConfig().getPrefix();
         String domain = getXmppServer().getConfig().getDomain();

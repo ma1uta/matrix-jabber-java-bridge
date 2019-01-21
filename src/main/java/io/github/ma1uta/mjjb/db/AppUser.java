@@ -16,6 +16,9 @@
 
 package io.github.ma1uta.mjjb.db;
 
+/**
+ * Matrix appuser.
+ */
 public class AppUser {
 
     private String localpart;

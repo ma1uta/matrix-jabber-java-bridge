@@ -21,20 +21,49 @@ import org.jdbi.v3.sqlobject.statement.GetGeneratedKeys;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
+/**
+ * Room DAO.
+ */
 public interface RoomDao {
 
+    /**
+     * Find 1:1 room be id.
+     *
+     * @param roomId room id.
+     * @return Room or @{code null}.
+     */
     @SqlQuery("select * from direct_room where room_id = :roomId")
     @RegisterRowMapper(DirectRoomMapper.class)
     DirectRoom findDirectRoom(String roomId);
 
+    /**
+     * Save info about the 1:1 room.
+     *
+     * @param roomId     room id.
+     * @param matrixUser matrix participant.
+     * @param xmppUser   xmpp participant.
+     * @return saved info.
+     */
     @SqlUpdate("insert into direct_room(room_id, matrix_user, xmpp_user) values(:roomId, :matrixUser, :xmppUser)")
     @GetGeneratedKeys
     @RegisterRowMapper(DirectRoomMapper.class)
     DirectRoom createDirectRoom(String roomId, String matrixUser, String xmppUser);
 
+    /**
+     * Update subscription of a matrix user.
+     *
+     * @param roomId       room id.
+     * @param subscription subscribed or not.
+     */
     @SqlUpdate("update direct_room set matrix_subs = :subscription where room_id = :roomId")
     void updateMatrixSubscription(String roomId, boolean subscription);
 
+    /**
+     * Update subscription of a xmpp user.
+     *
+     * @param roomId       room id.
+     * @param subscription subscribed or not.
+     */
     @SqlUpdate("update direct_room set xmpp_subs = :subscription where room_id = :roomId")
     void updateXmppSubscription(String roomId, boolean subscription);
 }

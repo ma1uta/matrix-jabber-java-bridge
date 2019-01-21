@@ -36,6 +36,12 @@ public class MessageRouter extends AbstractRouter<RoomMessage<?>> {
 
     private Map<Class<? extends RoomMessageContent>, BiFunction<Jid, RoomMessage<?>, Message>> converters = new HashMap<>();
 
+    /**
+     * Provides message converters.
+     *
+     * @param key message class.
+     * @return converter.
+     */
     public BiFunction<Jid, RoomMessage<?>, Message> getConverter(Class<? extends RoomMessageContent> key) {
         return converters.get(key);
     }
@@ -53,13 +59,13 @@ public class MessageRouter extends AbstractRouter<RoomMessage<?>> {
 
         return getJdbi().inTransaction(h -> {
             RoomDao roomDao = h.attach(RoomDao.class);
-            DirectRoom room = roomDao.findDirectRoom(message.getRoomId());
+            DirectRoom room = roomDao.findDirectRoom(message.getRoomId().toString());
             if (room == null) {
                 return false;
             }
 
             ServerMessage xmppMessage = ServerMessage.from(converter.apply(room.getXmppJid(), message));
-            xmppMessage.setFrom(Jid.of(mxidToJid(message.getSender())));
+            xmppMessage.setFrom(Jid.of(mxidToJid(message.getSender().toString())));
 
             getXmppServer().send(xmppMessage);
             return true;

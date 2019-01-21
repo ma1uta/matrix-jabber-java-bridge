@@ -27,6 +27,9 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
+/**
+ * Bridge certificate.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 public abstract class Cert {
 
@@ -34,6 +37,8 @@ public abstract class Cert {
      * Create Netty SSL context.
      *
      * @return Netty SSL context.
+     * @throws IOException              when cannot load certificate.
+     * @throws GeneralSecurityException when cannot create netty context.
      */
     public abstract SslContext createNettyContext() throws IOException, GeneralSecurityException;
 
@@ -41,6 +46,8 @@ public abstract class Cert {
      * Create Java SSL context.
      *
      * @return Java SSL context.
+     * @throws IOException              when cannot load certificate.
+     * @throws GeneralSecurityException when cannot create jdk context.
      */
     public abstract SSLContext createJavaContext() throws IOException, GeneralSecurityException;
 

@@ -16,11 +16,27 @@
 
 package io.github.ma1uta.mjjb;
 
+/**
+ * Common logger names.
+ */
 public class Loggers {
 
+    private Loggers() {
+        // singleton
+    }
+
+    /**
+     * Log incoming and outgoing requests.
+     */
     public static final String REQUEST_LOGGER = "REQUEST_LOGGER";
 
+    /**
+     * Log incoming and outgoing stanzas.
+     */
     public static final String STANZA_LOGGER = "STANZA_LOGGER";
 
+    /**
+     * Log other events.
+     */
     public static final String LOGGER = "LOGGER";
 }

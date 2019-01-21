@@ -20,6 +20,9 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.List;
 
+/**
+ * Certificates, Privkey pair.
+ */
 public class CertAndPrivKey {
 
     private final PrivateKey privateKey;

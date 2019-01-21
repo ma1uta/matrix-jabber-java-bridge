@@ -27,6 +27,9 @@ import rocks.xmpp.core.stanza.model.Stanza;
 
 import java.lang.reflect.ParameterizedType;
 
+/**
+ * Router factory.
+ */
 public class RouterFactory {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RouterFactory.class);
@@ -50,6 +53,11 @@ public class RouterFactory {
         return jdbi;
     }
 
+    /**
+     * Add matrix routers.
+     *
+     * @param routers new matrix routers.
+     */
     @SuppressWarnings("unchecked")
     public void addMatrixRouter(AbstractRouter<? extends Event>... routers) {
         for (AbstractRouter<? extends Event> router : routers) {
@@ -62,6 +70,11 @@ public class RouterFactory {
         return matrixRouters;
     }
 
+    /**
+     * Add xmpp routers.
+     *
+     * @param router new xmpp routers.
+     */
     @SuppressWarnings("unchecked")
     public void addXmppRouter(AbstractRouter<? extends Stanza> router) {
         Class<?> key = (Class<?>) ((ParameterizedType) router.getClass().getGenericSuperclass()).getActualTypeArguments()[0];
@@ -72,6 +85,11 @@ public class RouterFactory {
         return xmppRouters;
     }
 
+    /**
+     * Process Matrix event.
+     *
+     * @param event event.
+     */
     public void process(Event event) {
         for (AbstractRouter<Event> router : getMatrixRouters().get(event.getClass())) {
             if (router.apply(event)) {
@@ -80,6 +98,11 @@ public class RouterFactory {
         }
     }
 
+    /**
+     * Process Xmpp stanza.
+     *
+     * @param stanza stanza.
+     */
     public void process(Stanza stanza) {
         for (AbstractRouter<Stanza> router : getXmppRouters().get(stanza.getClass())) {
             if (router.apply(stanza)) {

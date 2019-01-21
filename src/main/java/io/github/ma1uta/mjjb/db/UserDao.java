@@ -18,8 +18,16 @@ package io.github.ma1uta.mjjb.db;
 
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
+/**
+ * User DAO.
+ */
 public interface UserDao {
 
+    /**
+     * Save info about new appuser.
+     *
+     * @param localpart appuser's username.
+     */
     @SqlUpdate("insert into app_user(localpart) values(:localpart)")
     void create(String localpart);
 }

@@ -44,6 +44,9 @@ public class OutgoingSession extends Session {
         return false;
     }
 
+    /**
+     * Handshake with remote server.
+     */
     public void handshake() {
         getConnection().send(StreamHeader.initialServerToServer(Jid.of(getXmppServer().getConfig().getDomain()), getJid(), null));
     }

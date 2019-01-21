@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.matrix;
 
+import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.factory.jaxrs.AppJaxRsRequestFactory;
 import io.github.ma1uta.matrix.event.RoomMessage;
@@ -66,7 +67,7 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         this.routerFactory = routerFactory;
         this.matrixClient = new MatrixClient.Builder()
             .requestFactory(new AppJaxRsRequestFactory(config.getHomeserver()))
-            .userId(config.getMasterUserId())
+            .userId(Id.valueOf(config.getMasterUserId()))
             .accessToken(config.getAsToken())
             .build();
 

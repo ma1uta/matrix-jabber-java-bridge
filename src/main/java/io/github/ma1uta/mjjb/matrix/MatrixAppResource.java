@@ -98,12 +98,12 @@ public class MatrixAppResource implements ApplicationApi {
     }
 
     @Override
-    public void rooms(String roomAlias, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
+    public void rooms(Id roomAlias, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
         asyncResponse.resume(Response.ok().build());
     }
 
     @Override
-    public void users(String userId, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
+    public void users(Id userId, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
         CompletableFuture.runAsync(() -> {
             try {
                 LOGGER.debug("Create new user {}", userId);
@@ -116,9 +116,9 @@ public class MatrixAppResource implements ApplicationApi {
         });
     }
 
-    private void createUser(String userId) {
+    private void createUser(Id userId) {
         RegisterRequest request = new RegisterRequest();
-        request.setUsername(userId);
+        request.setUsername(userId.getLocalpart());
         request.setInhibitLogin(false);
 
         getMatrixClient().account().register(request).whenCompleteAsync((resp, exc) -> {
@@ -126,7 +126,7 @@ public class MatrixAppResource implements ApplicationApi {
                 LOGGER.error(String.format("Failed create new user: %s", userId), exc);
                 throw new MatrixException(ErrorResponse.Code.M_UNKNOWN, exc.getMessage());
             }
-            getJdbi().useTransaction(h -> h.attach(UserDao.class).create(Id.getInstance().localpart(resp.getUserId())));
+            getJdbi().useTransaction(h -> h.attach(UserDao.class).create(resp.getUserId().getLocalpart()));
         }).join();
     }
 }

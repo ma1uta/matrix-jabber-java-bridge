@@ -22,6 +22,9 @@ import rocks.xmpp.core.stanza.model.Message;
 
 import java.util.function.BiFunction;
 
+/**
+ * Convert Matrix text message to the XMPP message.
+ */
 public class TextConverter implements BiFunction<Jid, RoomMessage<?>, Message> {
 
     @Override

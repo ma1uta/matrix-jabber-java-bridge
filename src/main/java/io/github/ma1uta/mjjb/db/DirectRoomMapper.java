@@ -22,6 +22,9 @@ import org.jdbi.v3.core.statement.StatementContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+/**
+ * DirectRoom Row mapper.
+ */
 public class DirectRoomMapper implements RowMapper<DirectRoom> {
 
     @Override

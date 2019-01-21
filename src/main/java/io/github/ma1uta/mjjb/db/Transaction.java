@@ -18,6 +18,9 @@ package io.github.ma1uta.mjjb.db;
 
 import java.time.LocalDateTime;
 
+/**
+ * Appservice transaction.
+ */
 public class Transaction {
 
     private String id;

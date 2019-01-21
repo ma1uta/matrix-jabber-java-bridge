@@ -32,6 +32,9 @@ import java.security.cert.CertificateException;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 
+/**
+ * PKCS12 certificate info.
+ */
 @JsonTypeName("pkcs12")
 public class PKCS12Cert extends Cert {
 

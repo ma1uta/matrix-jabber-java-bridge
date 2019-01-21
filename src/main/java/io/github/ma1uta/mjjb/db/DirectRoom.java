@@ -18,6 +18,9 @@ package io.github.ma1uta.mjjb.db;
 
 import rocks.xmpp.addr.Jid;
 
+/**
+ * One-to-one room.
+ */
 public class DirectRoom {
 
     private String matrixUser;
@@ -48,6 +51,11 @@ public class DirectRoom {
         this.xmppUser = xmppUser;
     }
 
+    /**
+     * Get JID.
+     *
+     * @return JID.
+     */
     public Jid getXmppJid() {
         if (xmppJid == null) {
             xmppJid = Jid.of(xmppUser);
@@ -55,6 +63,11 @@ public class DirectRoom {
         return xmppJid;
     }
 
+    /**
+     * Set JID.
+     *
+     * @param xmppJid JID.
+     */
     public void setXmppJid(Jid xmppJid) {
         this.xmppJid = xmppJid;
         this.xmppUser = xmppJid.toString();

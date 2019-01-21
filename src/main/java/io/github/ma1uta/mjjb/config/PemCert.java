@@ -20,13 +20,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import sun.security.util.DerInputStream;
-import sun.security.util.DerValue;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,7 +35,7 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.security.spec.RSAPrivateCrtKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -46,6 +43,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.SSLContext;
 
+/**
+ * PEM certificate info.
+ */
 @JsonTypeName("pem")
 public class PemCert extends Cert {
 
@@ -134,7 +134,7 @@ public class PemCert extends Cert {
 
         String content = String.join("", Files.readAllLines(path, StandardCharsets.UTF_8)).replaceAll("\n", "");
 
-        Matcher m = DELIMITER_PATTERN.matcher(content);
+        Matcher matcher = DELIMITER_PATTERN.matcher(content);
         CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
         Base64.Decoder decoder = Base64.getMimeDecoder();
         List<X509Certificate> certList = new ArrayList<>();
@@ -142,41 +142,18 @@ public class PemCert extends Cert {
         PrivateKey privateKey = null;
 
         int start = 0;
-        while (m.find(start)) {
-            String type = m.group(1);
-            String base64Data = m.group(2);
+        while (matcher.find(start)) {
+            String type = matcher.group(1);
+            String base64Data = matcher.group(2);
             byte[] data = decoder.decode(base64Data);
-            start += m.group(0).length();
+            start += matcher.group(0).length();
             type = type.toUpperCase();
             if (type.contains("CERTIFICATE")) {
                 X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(data));
                 certList.add(cert);
             } else if (type.contains("RSA PRIVATE KEY")) {
-
-                DerInputStream derReader = new DerInputStream(Base64.getDecoder().decode(data));
-
-                DerValue[] seq = derReader.getSequence(0);
-
-                if (seq.length < 9) {
-                    throw new GeneralSecurityException("Could not parse a PKCS1 private key.");
-                }
-
-                // skip version seq[0];
-                BigInteger modulus = seq[1].getBigInteger();
-                BigInteger publicExp = seq[2].getBigInteger();
-                BigInteger privateExp = seq[3].getBigInteger();
-                BigInteger prime1 = seq[4].getBigInteger();
-                BigInteger prime2 = seq[5].getBigInteger();
-                BigInteger exp1 = seq[6].getBigInteger();
-                BigInteger exp2 = seq[7].getBigInteger();
-                BigInteger crtCoef = seq[8].getBigInteger();
-
-                RSAPrivateCrtKeySpec keySpec = new RSAPrivateCrtKeySpec(modulus, publicExp, privateExp, prime1, prime2, exp1, exp2,
-                    crtCoef);
-
-                KeyFactory factory = KeyFactory.getInstance("RSA");
-
-                privateKey = factory.generatePrivate(keySpec);
+                PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(data));
+                privateKey = KeyFactory.getInstance("RSA").generatePrivate(keySpec);
             } else {
                 System.err.println("Unsupported type: " + type);
             }

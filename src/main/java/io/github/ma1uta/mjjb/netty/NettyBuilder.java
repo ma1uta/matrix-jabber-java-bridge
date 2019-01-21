@@ -136,6 +136,12 @@ public class NettyBuilder {
         }
     }
 
+    /**
+     * Extract port from the uri.
+     *
+     * @param uri uri.
+     * @return port.
+     */
     public static int getPort(URI uri) {
         if (uri.getPort() == -1) {
             if ("http".equalsIgnoreCase(uri.getScheme())) {

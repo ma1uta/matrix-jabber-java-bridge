@@ -21,14 +21,35 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
 import java.time.LocalDateTime;
 
+/**
+ * Transaction DAO.
+ */
 public interface TransactionDao {
 
+    /**
+     * Check that specified transaction was processed.
+     *
+     * @param txnId transaction id.
+     * @return {@code 1} if the transaction was processed, else {@code 0}.
+     */
     @SqlQuery("select count(*) from transaction where id = :txnId")
     int exist(String txnId);
 
+    /**
+     * Start transaction process.
+     *
+     * @param txnId   transaction id.
+     * @param started start date time.
+     */
     @SqlUpdate("insert into transaction(id, started) values(:txnId, :started)")
     void start(String txnId, LocalDateTime started);
 
+    /**
+     * Finish transaction process.
+     *
+     * @param txnid     transaction id.
+     * @param processed finish date time.
+     */
     @SqlUpdate("update transaction set processed = :processed where id = :txnId")
     void finish(String txnid, LocalDateTime processed);
 }

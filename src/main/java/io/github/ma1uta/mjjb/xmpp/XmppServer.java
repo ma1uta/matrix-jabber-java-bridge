@@ -84,6 +84,13 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         return incomingSession;
     }
 
+    /**
+     * Create new outgoing session.
+     *
+     * @param jid remote target.
+     * @return outgoint session.
+     * @throws JAXBException when cannote create xml unmarshaller/marshaller.
+     */
     public OutgoingSession newOutgoingSession(Jid jid) throws JAXBException {
         LOGGER.debug("New outgoing session to {}.", jid.toString());
         OutgoingSession outgoingSession = new OutgoingSession(this, jid);
@@ -113,6 +120,12 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         return connectionConfig;
     }
 
+    /**
+     * Establish session.
+     *
+     * @param jid             remote JID.
+     * @param incomingSession session.
+     */
     public void establish(Jid jid, IncomingSession incomingSession) {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Establish incoming session from {}", jid.toString());
