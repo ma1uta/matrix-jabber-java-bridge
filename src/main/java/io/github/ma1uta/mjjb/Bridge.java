@@ -8,7 +8,20 @@ import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.config.XmppConfig;
 import io.github.ma1uta.mjjb.matrix.MatrixServer;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.Database;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.exception.LiquibaseException;
+import liquibase.resource.ClassLoaderResourceAccessor;
+import liquibase.resource.FileSystemResourceAccessor;
 import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.postgres.PostgresPlugin;
+import org.jdbi.v3.sqlobject.SqlObjectPlugin;
+
+import java.sql.SQLException;
 
 /**
  * Matrix-XMPP bridge.
@@ -70,6 +83,21 @@ public class Bridge {
 
         dataSource = new HikariDataSource(hikariConfig);
         jdbi = Jdbi.create(dataSource);
+        jdbi.installPlugin(new SqlObjectPlugin());
+        jdbi.installPlugin(new PostgresPlugin());
+        updateSchema();
+    }
+
+    private void updateSchema() {
+        try {
+            Database database = DatabaseFactory.getInstance()
+                .findCorrectDatabaseImplementation(new JdbcConnection(dataSource.getConnection()));
+            Liquibase liquibase = new Liquibase(getClass().getResource("/migrations.xml").getFile(), new FileSystemResourceAccessor(),
+                database);
+            liquibase.update(new Contexts(), new LabelExpression());
+        } catch (SQLException | LiquibaseException e) {
+            e.printStackTrace();
+        }
     }
 
     private void initMatrix(MatrixConfig config, RouterFactory routerFactory) {

@@ -16,6 +16,8 @@
 
 package io.github.ma1uta.mjjb.db;
 
+import org.jdbi.v3.sqlobject.customizer.Bind;
+import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
 /**
@@ -29,5 +31,14 @@ public interface UserDao {
      * @param localpart appuser's username.
      */
     @SqlUpdate("insert into app_user(localpart) values(:localpart)")
-    void create(String localpart);
+    void create(@Bind("localpart") String localpart);
+
+    /**
+     * Check appuser availability.
+     *
+     * @param localpart appuser's username.
+     * @return {@code 1} if exists else {@code false}.
+     */
+    @SqlQuery("select count(*) from app_user where localpart = :localpart")
+    int exist(@Bind("localpart") String localpart);
 }

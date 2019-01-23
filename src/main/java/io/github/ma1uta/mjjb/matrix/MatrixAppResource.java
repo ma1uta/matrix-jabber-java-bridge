@@ -117,16 +117,24 @@ public class MatrixAppResource implements ApplicationApi {
     }
 
     private void createUser(Id userId) {
-        RegisterRequest request = new RegisterRequest();
-        request.setUsername(userId.getLocalpart());
-        request.setInhibitLogin(false);
+        getJdbi().useTransaction(h -> {
+            UserDao userDao = h.attach(UserDao.class);
 
-        getMatrixClient().account().register(request).whenCompleteAsync((resp, exc) -> {
-            if (exc != null) {
-                LOGGER.error(String.format("Failed create new user: %s", userId), exc);
-                throw new MatrixException(ErrorResponse.Code.M_UNKNOWN, exc.getMessage());
+            if (userDao.exist(userId.getLocalpart()) > 0) {
+                return;
             }
-            getJdbi().useTransaction(h -> h.attach(UserDao.class).create(resp.getUserId().getLocalpart()));
-        }).join();
+
+            RegisterRequest request = new RegisterRequest();
+            request.setUsername(userId.getLocalpart());
+            request.setInhibitLogin(false);
+
+            getMatrixClient().account().register(request).whenCompleteAsync((resp, exc) -> {
+                if (exc != null) {
+                    LOGGER.error(String.format("Failed create new user: %s", userId), exc);
+                    throw new MatrixException(ErrorResponse.Code.M_UNKNOWN, exc.getMessage());
+                }
+                userDao.create(resp.getUserId().getLocalpart());
+            }).join();
+        });
     }
 }

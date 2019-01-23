@@ -4,8 +4,8 @@ CREATE TABLE "app_user" (
 
 CREATE TABLE "transaction" (
   "id" TEXT PRIMARY KEY,
-  "started" TIMESTAMP WITH TIMEZONE,
-  "processed" TIMESTAMP WITH TIMEZONE
+  "started" TIMESTAMP WITH TIME ZONE,
+  "processed" TIMESTAMP WITH TIME ZONE
 );
 
 CREATE TABLE "multi_user_room" (

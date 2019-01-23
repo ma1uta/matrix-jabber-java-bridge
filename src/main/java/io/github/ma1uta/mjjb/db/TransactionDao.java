@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.db;
 
+import org.jdbi.v3.sqlobject.customizer.Bind;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 
@@ -33,7 +34,7 @@ public interface TransactionDao {
      * @return {@code 1} if the transaction was processed, else {@code 0}.
      */
     @SqlQuery("select count(*) from transaction where id = :txnId")
-    int exist(String txnId);
+    int exist(@Bind("txnId") String txnId);
 
     /**
      * Start transaction process.
@@ -42,7 +43,7 @@ public interface TransactionDao {
      * @param started start date time.
      */
     @SqlUpdate("insert into transaction(id, started) values(:txnId, :started)")
-    void start(String txnId, LocalDateTime started);
+    void start(@Bind("txnId") String txnId, @Bind("started") LocalDateTime started);
 
     /**
      * Finish transaction process.
@@ -51,5 +52,5 @@ public interface TransactionDao {
      * @param processed finish date time.
      */
     @SqlUpdate("update transaction set processed = :processed where id = :txnId")
-    void finish(String txnid, LocalDateTime processed);
+    void finish(@Bind("txnId") String txnid, @Bind("processed") LocalDateTime processed);
 }

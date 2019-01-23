@@ -17,8 +17,11 @@
 package io.github.ma1uta.mjjb.matrix;
 
 import io.github.ma1uta.matrix.Id;
+import io.github.ma1uta.matrix.client.AppServiceClient;
 import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.factory.jaxrs.AppJaxRsRequestFactory;
+import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
+import io.github.ma1uta.matrix.event.RoomMember;
 import io.github.ma1uta.matrix.event.RoomMessage;
 import io.github.ma1uta.matrix.event.content.RoomMessageContent;
 import io.github.ma1uta.matrix.event.message.Text;
@@ -27,6 +30,7 @@ import io.github.ma1uta.mjjb.NetworkServer;
 import io.github.ma1uta.mjjb.RouterFactory;
 import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
+import io.github.ma1uta.mjjb.db.UserDao;
 import io.github.ma1uta.mjjb.matrix.converter.TextConverter;
 import io.github.ma1uta.mjjb.matrix.netty.JerseyServerInitializer;
 import io.github.ma1uta.mjjb.matrix.netty.NettyHttpContainer;
@@ -65,15 +69,30 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         this.jdbi = jdbi;
         this.config = config;
         this.routerFactory = routerFactory;
-        this.matrixClient = new MatrixClient.Builder()
+        this.matrixClient = new AppServiceClient.Builder()
             .requestFactory(new AppJaxRsRequestFactory(config.getHomeserver()))
             .userId(Id.valueOf(config.getMasterUserId()))
             .accessToken(config.getAsToken())
             .build();
 
+        initMasterBot();
         initRestAPI();
         initSSL();
         initRouters();
+    }
+
+    private void initMasterBot() {
+        this.jdbi.useTransaction(h -> {
+            UserDao userDao = h.attach(UserDao.class);
+            Id masterId = Id.valueOf(getConfig().getMasterUserId());
+            if (userDao.exist(masterId.getLocalpart()) == 0) {
+                RegisterRequest request = new RegisterRequest();
+                request.setUsername(masterId.getLocalpart());
+                request.setInhibitLogin(false);
+                getMatrixClient().account().register(request).join();
+                userDao.create(masterId.getLocalpart());
+            }
+        });
     }
 
     private void initRestAPI() {
@@ -81,7 +100,7 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         Set<Object> resources = new HashSet<>();
         resources.add(appResource);
         resources.add(new LegacyMatrixAppResource(appResource));
-        resources.add(new SecurityContextFilter(config.getAsToken()));
+        resources.add(new SecurityContextFilter(config.getHsToken()));
         resources.add(new MatrixExceptionHandler());
         if (LoggerFactory.getLogger(Loggers.REQUEST_LOGGER).isDebugEnabled()) {
             resources.add(new LoggingFilter());
@@ -105,7 +124,8 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         messageConverters.put(Text.class, new TextConverter());
         MessageRouter router = new MessageRouter();
         router.setConverters(messageConverters);
-        routerFactory.addMatrixRouter(router, new DirectInviteRouter());
+        routerFactory.addMatrixRouter(RoomMessage.class, router);
+        routerFactory.addMatrixRouter(RoomMember.class, new DirectInviteRouter());
     }
 
     @Override
