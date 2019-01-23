@@ -46,7 +46,7 @@ public class PKCS12Cert extends Cert {
 
     @Override
     public SslContext createNettyContext() throws IOException, GeneralSecurityException {
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance("RSA");
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(loadKeyStore(), getKeyStorePassword().toCharArray());
         return SslContextBuilder.forServer(kmf).build();
     }

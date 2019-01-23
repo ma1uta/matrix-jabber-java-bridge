@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.config;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.netty.handler.ssl.SslContext;
 
@@ -31,6 +32,7 @@ import javax.net.ssl.TrustManagerFactory;
  * Bridge certificate.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes( {@JsonSubTypes.Type(PKCS12Cert.class), @JsonSubTypes.Type(PemCert.class)})
 public abstract class Cert {
 
     /**
