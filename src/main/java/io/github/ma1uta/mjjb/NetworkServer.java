@@ -31,8 +31,9 @@ public interface NetworkServer<C> extends AutoCloseable {
      * @param jdbi          database point.
      * @param config        configuration.
      * @param routerFactory router factory.
+     * @throws Exception when failed start network server.
      */
-    void init(Jdbi jdbi, C config, RouterFactory routerFactory);
+    void init(Jdbi jdbi, C config, RouterFactory routerFactory) throws Exception;
 
     /**
      * Run the server.

@@ -188,7 +188,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     }
 
     @Override
-    public void init(Jdbi jdbi, XmppConfig config, RouterFactory routerFactory) {
+    public void init(Jdbi jdbi, XmppConfig config, RouterFactory routerFactory) throws Exception {
         this.jdbi = jdbi;
         this.config = config;
         this.routerFactory = routerFactory;
@@ -196,14 +196,10 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         initRouters();
     }
 
-    private void initSSL(XmppConfig config) {
+    private void initSSL(XmppConfig config) throws Exception {
         Cert cert = config.getSsl();
         if (cert != null) {
-            try {
-                this.sslContext = cert.createJavaContext();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            this.sslContext = cert.createJavaContext();
         }
     }
 

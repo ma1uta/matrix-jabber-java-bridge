@@ -39,7 +39,7 @@ import javax.ws.rs.ext.Provider;
  * Delegates all requests to the {@link MatrixAppResource}.
  */
 @Provider
-@Path("/")
+@Path("")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class LegacyMatrixAppResource {

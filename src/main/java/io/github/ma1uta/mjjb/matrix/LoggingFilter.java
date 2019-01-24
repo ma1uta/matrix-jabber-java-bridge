@@ -38,7 +38,7 @@ public class LoggingFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Incoming request: " + requestContext.getUriInfo().getRequestUri().toString());
+            LOGGER.debug("Incoming request: " + requestContext.getMethod() + " " + requestContext.getUriInfo().getRequestUri().toString());
         }
     }
 }

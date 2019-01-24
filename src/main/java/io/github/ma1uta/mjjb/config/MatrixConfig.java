@@ -24,6 +24,9 @@ public class MatrixConfig {
 
     private String homeserver;
 
+    @JsonProperty("disable_ssl_validation")
+    private boolean disableSslValidation;
+
     public String getUrl() {
         return url;
     }
@@ -78,5 +81,13 @@ public class MatrixConfig {
 
     public void setHomeserver(String homeserver) {
         this.homeserver = homeserver;
+    }
+
+    public boolean isDisableSslValidation() {
+        return disableSslValidation;
+    }
+
+    public void setDisableSslValidation(boolean disableSslValidation) {
+        this.disableSslValidation = disableSslValidation;
     }
 }

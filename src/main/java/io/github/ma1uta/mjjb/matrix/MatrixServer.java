@@ -25,6 +25,7 @@ import io.github.ma1uta.matrix.event.RoomMember;
 import io.github.ma1uta.matrix.event.RoomMessage;
 import io.github.ma1uta.matrix.event.content.RoomMessageContent;
 import io.github.ma1uta.matrix.event.message.Text;
+import io.github.ma1uta.matrix.support.jackson.JacksonContextResolver;
 import io.github.ma1uta.mjjb.Loggers;
 import io.github.ma1uta.mjjb.NetworkServer;
 import io.github.ma1uta.mjjb.RouterFactory;
@@ -45,11 +46,18 @@ import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stanza.model.Message;
 
 import java.net.URI;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import javax.ws.rs.client.ClientBuilder;
 
 /**
  * All Matrix endpoints.
@@ -65,20 +73,44 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
     private Channel channel;
 
     @Override
-    public void init(Jdbi jdbi, MatrixConfig config, RouterFactory routerFactory) {
+    public void init(Jdbi jdbi, MatrixConfig config, RouterFactory routerFactory) throws Exception {
         this.jdbi = jdbi;
         this.config = config;
         this.routerFactory = routerFactory;
-        this.matrixClient = new AppServiceClient.Builder()
-            .requestFactory(new AppJaxRsRequestFactory(config.getHomeserver()))
-            .userId(Id.valueOf(config.getMasterUserId()))
-            .accessToken(config.getAsToken())
-            .build();
 
+        initMatrixClient();
         initMasterBot();
         initRestAPI();
         initSSL();
         initRouters();
+    }
+
+    private void initMatrixClient() throws Exception {
+        ClientBuilder clientBuilder = ClientBuilder.newBuilder().register(new JacksonContextResolver());
+        MatrixConfig config = getConfig();
+        if (config.isDisableSslValidation()) {
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+
+            sslContext.init(null, new TrustManager[] {new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+                }
+
+                public void checkServerTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+                }
+
+                public X509Certificate[] getAcceptedIssuers() {
+                    return new X509Certificate[0];
+                }
+            }
+            }, new SecureRandom());
+
+            clientBuilder.sslContext(sslContext);
+        }
+        this.matrixClient = new AppServiceClient.Builder()
+            .requestFactory(new AppJaxRsRequestFactory(clientBuilder.build(), config.getHomeserver()))
+            .userId(Id.valueOf(config.getMasterUserId()))
+            .accessToken(config.getAsToken())
+            .build();
     }
 
     private void initMasterBot() {
@@ -102,20 +134,17 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         resources.add(new LegacyMatrixAppResource(appResource));
         resources.add(new SecurityContextFilter(config.getHsToken()));
         resources.add(new MatrixExceptionHandler());
+        resources.add(new JacksonContextResolver());
         if (LoggerFactory.getLogger(Loggers.REQUEST_LOGGER).isDebugEnabled()) {
             resources.add(new LoggingFilter());
         }
         this.matrixApp = new MatrixApp(resources);
     }
 
-    private void initSSL() {
+    private void initSSL() throws Exception {
         Cert cert = config.getSsl();
         if (cert != null) {
-            try {
-                sslContext = cert.createNettyContext();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            sslContext = cert.createNettyContext();
         }
     }
 
