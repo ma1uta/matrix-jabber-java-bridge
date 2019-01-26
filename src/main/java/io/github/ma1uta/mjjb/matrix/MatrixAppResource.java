@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.matrix;
 
+import io.github.ma1uta.matrix.EmptyResponse;
 import io.github.ma1uta.matrix.ErrorResponse;
 import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.application.api.ApplicationApi;
@@ -93,13 +94,13 @@ public class MatrixAppResource implements ApplicationApi {
             } catch (Exception e) {
                 LOGGER.error(String.format("Failed process transaction %s", txnId));
             }
-            asyncResponse.resume(Response.ok().build());
+            asyncResponse.resume(Response.ok(new EmptyResponse()).build());
         });
     }
 
     @Override
     public void rooms(Id roomAlias, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
-        asyncResponse.resume(Response.ok().build());
+        asyncResponse.resume(Response.ok(new EmptyResponse()).build());
     }
 
     @Override
@@ -108,7 +109,7 @@ public class MatrixAppResource implements ApplicationApi {
             try {
                 LOGGER.debug("Create new user {}", userId);
                 createUser(userId);
-                asyncResponse.resume(Response.ok().build());
+                asyncResponse.resume(Response.ok(new EmptyResponse()).build());
             } catch (Exception e) {
                 LOGGER.error("Failed create new user.", e);
                 asyncResponse.resume(e);

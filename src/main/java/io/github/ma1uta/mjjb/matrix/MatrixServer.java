@@ -114,17 +114,21 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
     }
 
     private void initMasterBot() {
-        this.jdbi.useTransaction(h -> {
-            UserDao userDao = h.attach(UserDao.class);
-            Id masterId = Id.valueOf(getConfig().getMasterUserId());
-            if (userDao.exist(masterId.getLocalpart()) == 0) {
-                RegisterRequest request = new RegisterRequest();
-                request.setUsername(masterId.getLocalpart());
-                request.setInhibitLogin(false);
-                getMatrixClient().account().register(request).join();
-                userDao.create(masterId.getLocalpart());
-            }
-        });
+        try {
+            this.jdbi.useTransaction(h -> {
+                UserDao userDao = h.attach(UserDao.class);
+                Id masterId = Id.valueOf(getConfig().getMasterUserId());
+                if (userDao.exist(masterId.getLocalpart()) == 0) {
+                    RegisterRequest request = new RegisterRequest();
+                    request.setUsername(masterId.getLocalpart());
+                    request.setInhibitLogin(false);
+                    getMatrixClient().account().register(request).join();
+                    userDao.create(masterId.getLocalpart());
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void initRestAPI() {

@@ -21,6 +21,7 @@ import io.github.ma1uta.mjjb.RouterFactory;
 import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.XmppConfig;
 import io.github.ma1uta.mjjb.netty.NettyBuilder;
+import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import io.github.ma1uta.mjjb.xmpp.netty.XmppServerInitializer;
 import io.netty.channel.Channel;
 import org.jdbi.v3.core.Jdbi;
@@ -47,8 +48,8 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     private static final Logger LOGGER = LoggerFactory.getLogger(XmppServer.class);
 
     private final Set<IncomingSession> initialIncomingSessions = new HashSet<>();
-    private final Map<Jid, IncomingSession> establishedIncomingSessions = new HashMap<>();
-    private final Map<Jid, OutgoingSession> establishedOutgoingSessions = new HashMap<>();
+    private final Map<String, IncomingSession> establishedIncomingSessions = new HashMap<>();
+    private final Map<String, OutgoingSession> establishedOutgoingSessions = new HashMap<>();
     private Jdbi jdbi;
     private XmppConfig config;
     private RouterFactory routerFactory;
@@ -94,8 +95,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     public OutgoingSession newOutgoingSession(Jid jid) throws JAXBException {
         LOGGER.debug("New outgoing session to {}.", jid.toString());
         OutgoingSession outgoingSession = new OutgoingSession(this, jid);
-        getEstablishedOutgoingSessions().put(jid, outgoingSession);
-        outgoingSession.handshake();
+        getEstablishedOutgoingSessions().put(jid.getDomain(), outgoingSession);
         return outgoingSession;
     }
 
@@ -103,11 +103,11 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         return initialIncomingSessions;
     }
 
-    public Map<Jid, IncomingSession> getEstablishedIncomingSessions() {
+    public Map<String, IncomingSession> getEstablishedIncomingSessions() {
         return establishedIncomingSessions;
     }
 
-    public Map<Jid, OutgoingSession> getEstablishedOutgoingSessions() {
+    public Map<String, OutgoingSession> getEstablishedOutgoingSessions() {
         return establishedOutgoingSessions;
     }
 
@@ -132,7 +132,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         }
         incomingSession.setJid(jid);
         initialIncomingSessions.remove(incomingSession);
-        establishedIncomingSessions.put(jid, incomingSession);
+        establishedIncomingSessions.put(jid.getDomain(), incomingSession);
     }
 
     public XmppConfig getConfig() {
@@ -152,14 +152,14 @@ public class XmppServer implements NetworkServer<XmppConfig> {
             try {
                 s.close();
             } catch (Exception e) {
-                LOGGER.error("Failed close connection to " + jid.toString(), e);
+                LOGGER.error("Failed close connection to " + jid, e);
             }
         });
         getEstablishedOutgoingSessions().forEach((jid, s) -> {
             try {
                 s.close();
             } catch (Exception e) {
-                LOGGER.error("Failed close connection to " + jid.toString(), e);
+                LOGGER.error("Failed close connection to " + jid, e);
             }
         });
         this.channel.close().sync();
@@ -171,20 +171,20 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      * @param message outgoing stanza.
      */
     public void send(Stanza message) {
-        OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(message.getTo());
-        if (outgoingSession != null) {
-            send0(outgoingSession, message);
-        } else {
-            try {
-                send0(newOutgoingSession(message.getTo()), message);
-            } catch (JAXBException e) {
-                LOGGER.error("Failed create JAXB marshaller/unmarshaller.", e);
-            }
+        OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(message.getTo().getDomain());
+        if (outgoingSession == null) {
+            outgoingSession = connect(message.getTo());
         }
+        sendInEventLook(outgoingSession, message);
     }
 
-    private void send0(OutgoingSession outgoingSession, Stanza message) {
-        outgoingSession.getConnection().send(message);
+    private void sendInEventLook(OutgoingSession outgoingSession, Stanza stanza) {
+        outgoingSession.getExecutor().execute(() -> outgoingSession.getConnection().send(stanza));
+    }
+
+    private OutgoingSession connect(Jid jid) {
+        NettyBuilder.createClient(jid.getDomain(), 5269, new XmppClientInitializer(this, jid), null);
+        return getEstablishedOutgoingSessions().get(jid.getDomain());
     }
 
     @Override

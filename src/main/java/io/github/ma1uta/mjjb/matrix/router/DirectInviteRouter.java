@@ -16,7 +16,6 @@
 
 package io.github.ma1uta.mjjb.matrix.router;
 
-import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.event.RoomMember;
 import io.github.ma1uta.matrix.event.content.RoomMemberContent;
 import io.github.ma1uta.mjjb.AbstractRouter;
@@ -45,8 +44,7 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
         String prefix = getMatrixServer().getConfig().getPrefix();
         String invitedUser = roomMember.getStateKey();
 
-        String localpart = Id.valueOf(invitedUser).getLocalpart();
-        if (!localpart.startsWith(prefix)) {
+        if (!invitedUser.startsWith("@" + prefix)) {
             return false;
         }
 
@@ -54,7 +52,7 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
             RoomDao roomDao = h.attach(RoomDao.class);
             String roomId = roomMember.getRoomId().toString();
             DirectRoom room = roomDao.findDirectRoom(roomId);
-            String jid = mxidToJid(localpart);
+            String jid = extractJidFromMxid(invitedUser);
             if (room == null) {
                 roomDao.createDirectRoom(roomId, roomMember.getSender().toString(), jid);
             }

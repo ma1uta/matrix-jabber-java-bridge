@@ -16,6 +16,8 @@
 
 package io.github.ma1uta.mjjb;
 
+import io.github.ma1uta.matrix.UserId;
+import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.matrix.MatrixServer;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import org.jdbi.v3.core.Jdbi;
@@ -23,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.function.Function;
 
@@ -70,14 +73,36 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
      * @param mxid MXID.
      * @return JID.
      */
-    public String mxidToJid(String mxid) {
+    public String extractJidFromMxid(String mxid) {
         String prefix = getMatrixServer().getConfig().getPrefix();
-        String domain = getXmppServer().getConfig().getDomain();
         try {
-            return prefix + URLEncoder.encode(mxid, "UTF-8") + "@" + domain;
+            int delim = mxid.indexOf(":");
+            String localpart = mxid.substring(1, delim);
+            String prepMxid = localpart.startsWith(prefix) ? localpart.substring(prefix.length()) : localpart;
+            String encodedJid = prepMxid.replaceAll("=", "%");
+            return URLDecoder.decode(encodedJid, "UTF-8");
         } catch (UnsupportedEncodingException e) {
             LOGGER.error("Your JRE doesn't have UTF-8 encoder", e);
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * Map JID to MXID.
+     *
+     * @param jid JID.
+     * @return MXID.
+     */
+    public String encodeJidToMxid(String jid) {
+        String encodedJid;
+        try {
+            encodedJid = URLEncoder.encode(jid, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            LOGGER.error("Your JRE doesn't have UTF-8 decoder", e);
+            throw new RuntimeException(e);
+        }
+        String prepMxid = encodedJid.replaceAll("%", "=");
+        MatrixConfig config = getMatrixServer().getConfig();
+        return UserId.SIGIL + config.getPrefix() + prepMxid + ":" + config.getHomeserver();
     }
 }

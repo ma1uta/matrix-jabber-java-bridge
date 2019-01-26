@@ -63,9 +63,9 @@ public abstract class Cert {
     protected SSLContext load(KeyStore keyStore, char[] password) throws GeneralSecurityException {
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(keyStore);
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance("RSA");
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(keyStore, password);
-        SSLContext sslContext = SSLContext.getInstance("TLS1.2");
+        SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
         return sslContext;
 

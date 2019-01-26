@@ -65,7 +65,7 @@ public class MessageRouter extends AbstractRouter<RoomMessage<?>> {
             }
 
             ServerMessage xmppMessage = ServerMessage.from(converter.apply(room.getXmppJid(), message));
-            xmppMessage.setFrom(Jid.of(mxidToJid(message.getSender().toString())));
+            xmppMessage.setFrom(Jid.of(extractJidFromMxid(message.getSender().toString())));
 
             getXmppServer().send(xmppMessage);
             return true;

@@ -17,7 +17,9 @@ CREATE TABLE "multi_user_room" (
 CREATE TABLE "direct_room" (
   "room_id" TEXT PRIMARY KEY,
   "matrix_user" TEXT,
-  "xmpp_user" TEXT
+  "xmpp_user" TEXT,
+  "matrix_subs" BOOLEAN,
+  "xmpp_subs" BOOLEAN
 );
 
 CREATE TABLE "inviters" (

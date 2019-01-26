@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.xmpp;
 
+import io.netty.channel.EventLoop;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stream.model.StreamHeader;
 
@@ -26,9 +27,19 @@ import javax.xml.bind.JAXBException;
  */
 public class OutgoingSession extends Session {
 
+    private EventLoop executor;
+
     public OutgoingSession(XmppServer xmppServer, Jid jid) throws JAXBException {
         super(xmppServer);
         setJid(jid);
+    }
+
+    public EventLoop getExecutor() {
+        return executor;
+    }
+
+    public void setExecutor(EventLoop executor) {
+        this.executor = executor;
     }
 
     /**
