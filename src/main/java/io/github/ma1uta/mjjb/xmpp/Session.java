@@ -17,17 +17,21 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.Loggers;
+import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.addr.Jid;
-import rocks.xmpp.core.net.Connection;
+import rocks.xmpp.core.XmppException;
+import rocks.xmpp.core.net.TcpBinding;
 import rocks.xmpp.core.stream.StreamNegotiationResult;
 import rocks.xmpp.core.stream.model.StreamElement;
+import rocks.xmpp.core.stream.model.StreamHeader;
 import rocks.xmpp.core.stream.server.ServerStreamFeaturesManager;
 
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
+import javax.xml.namespace.QName;
 
 /**
  * XMPP S2S outgoing session.
@@ -37,11 +41,12 @@ public class Session implements AutoCloseable {
     protected static final Logger LOGGER = LoggerFactory.getLogger(Session.class);
     protected static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
 
-    private Connection connection;
+    private TcpBinding connection;
     private final Unmarshaller unmarshaller;
     private final Marshaller marshaller;
     private final ServerStreamFeaturesManager streamFeaturesManager = new ServerStreamFeaturesManager();
     private final XmppServer xmppServer;
+    private boolean withDialback = false;
     private Jid jid;
 
     public Session(XmppServer xmppServer) throws JAXBException {
@@ -63,14 +68,31 @@ public class Session implements AutoCloseable {
      *
      * @param streamElement stream stanza.
      * @return {@code true} to restart stream, else {@code false}.
+     * @throws XmppException when exception occured.
      */
-    public boolean handleStream(Object streamElement) {
+    public boolean handleStream(Object streamElement) throws XmppException {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(streamElement.toString());
         }
+        if (streamElement instanceof StreamHeader) {
+            StreamHeader header = (StreamHeader) streamElement;
+            for (QName namespace : header.getAdditionalNamespaces()) {
+                if (ServerDialback.NAMESPACE.equals(namespace.getNamespaceURI()) && ServerDialback.LOCALPART
+                    .equals(namespace.getPrefix())) {
+                    LOGGER.debug("Session with dialback.");
+                    withDialback = true;
+                    break;
+                }
+            }
+        }
+        if (withDialback) {
+            LOGGER.debug("Check dialback.");
+            if (!getXmppServer().dialback().negotiate(this, streamElement)) {
+                return false;
+            }
+        }
         if (streamElement instanceof StreamElement) {
-            StreamNegotiationResult result = getStreamFeaturesManager().handleElement((StreamElement) streamElement);
-            return result == StreamNegotiationResult.RESTART;
+            return getStreamFeaturesManager().handleElement((StreamElement) streamElement) == StreamNegotiationResult.RESTART;
         }
         return false;
     }
@@ -106,7 +128,7 @@ public class Session implements AutoCloseable {
             getConnection().send((StreamElement) throwable);
         }
         try {
-            getConnection().close();
+            close();
         } catch (Exception e) {
             LOGGER.error("Failed close xmpp connection", e);
         }
@@ -116,11 +138,11 @@ public class Session implements AutoCloseable {
         return streamFeaturesManager;
     }
 
-    public Connection getConnection() {
+    public TcpBinding getConnection() {
         return connection;
     }
 
-    public void setConnection(Connection connection) {
+    public void setConnection(TcpBinding connection) {
         this.connection = connection;
     }
 
@@ -130,7 +152,11 @@ public class Session implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        getXmppServer().remove(this);
         connection.close();
+        if (withDialback && getJid() != null) {
+            getXmppServer().dialback().remove(getJid().getDomain());
+        }
     }
 
     public Jid getJid() {

@@ -17,6 +17,8 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.XmppException;
+import rocks.xmpp.core.stanza.model.Stanza;
 import rocks.xmpp.core.stream.model.StreamFeatures;
 import rocks.xmpp.core.stream.model.StreamHeader;
 
@@ -33,13 +35,8 @@ public class IncomingSession extends Session {
         super(xmppServer);
     }
 
-    /**
-     * Handle stream (open, close, restart).
-     *
-     * @param streamElement stream stanza.
-     * @return {@code true} to restart stream, else {@code false}.
-     */
-    public boolean handleStream(Object streamElement) {
+    @Override
+    public boolean handleStream(Object streamElement) throws XmppException {
         if (super.handleStream(streamElement)) {
             return true;
         }
@@ -55,6 +52,9 @@ public class IncomingSession extends Session {
             ));
             // send supported features.
             getConnection().send(new StreamFeatures(getStreamFeaturesManager().getStreamFeatures()));
+        }
+        if (streamElement instanceof Stanza) {
+            getXmppServer().process((Stanza) streamElement);
         }
         return false;
     }

@@ -19,57 +19,33 @@ package io.github.ma1uta.mjjb.xmpp.netty;
 import io.github.ma1uta.mjjb.xmpp.OutgoingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInitializer;
 import rocks.xmpp.addr.Jid;
-import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
-import rocks.xmpp.core.net.ChannelEncryption;
-import rocks.xmpp.core.tls.server.StartTlsNegotiator;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 /**
  * XMPP server netty channel initializer.
  */
-public class XmppClientInitializer extends ChannelInitializer<Channel> {
+public class XmppClientInitializer extends XmppNettyInitializer<Channel, OutgoingSession> {
 
-    private final XmppServer xmppServer;
     private final Jid jid;
-    private NettyChannelConnection connection;
 
     public XmppClientInitializer(XmppServer xmppServer, Jid jid) {
-        this.xmppServer = xmppServer;
+        super(xmppServer);
         this.jid = jid;
     }
 
     @Override
-    protected void initChannel(Channel ch) throws Exception {
-        OutgoingSession outgoingSession = xmppServer.newOutgoingSession(jid);
-        connection = new NettyChannelConnection(
-            ch,
-            outgoingSession::handleStream,
-            outgoingSession::onRead,
-            outgoingSession::getUnmarshaller,
-            outgoingSession::onWrite,
-            outgoingSession::getMarshaller,
-            outgoingSession::onException,
-            xmppServer.getConnectionConfiguration()
-        );
-        outgoingSession.setExecutor(ch.eventLoop());
-        outgoingSession.setConnection(connection);
-        if (xmppServer.getConnectionConfiguration().getChannelEncryption() == ChannelEncryption.REQUIRED) {
-            outgoingSession.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(connection));
-        }
-        outgoingSession.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection));
-        outgoingSession.handshake();
+    protected OutgoingSession createSession() throws Exception {
+        return new OutgoingSession(getServer(), jid);
     }
 
     @Override
-    public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-        connection.close();
+    protected void notifyServer(OutgoingSession session) {
+        getServer().newOutgoingSession(session);
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        connection.close();
+    protected void initConnection(Channel channel, OutgoingSession session) {
+        super.initConnection(channel, session);
+        session.setExecutor(channel.eventLoop());
     }
 }

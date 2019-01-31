@@ -18,53 +18,24 @@ package io.github.ma1uta.mjjb.xmpp.netty;
 
 import io.github.ma1uta.mjjb.xmpp.IncomingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;
-import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
-import rocks.xmpp.core.net.ChannelEncryption;
-import rocks.xmpp.core.tls.server.StartTlsNegotiator;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 /**
  * XMPP server netty channel initializer.
  */
-public class XmppServerInitializer extends ChannelInitializer<SocketChannel> {
-
-    private final XmppServer xmppServer;
-    private NettyChannelConnection connection;
+public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, IncomingSession> {
 
     public XmppServerInitializer(XmppServer xmppServer) {
-        this.xmppServer = xmppServer;
+        super(xmppServer);
     }
 
     @Override
-    protected void initChannel(SocketChannel ch) throws Exception {
-        IncomingSession incomingSession = xmppServer.newIncomingSession();
-        connection = new NettyChannelConnection(
-            ch,
-            incomingSession::handleStream,
-            incomingSession::onRead,
-            incomingSession::getUnmarshaller,
-            incomingSession::onWrite,
-            incomingSession::getMarshaller,
-            incomingSession::onException,
-            xmppServer.getConnectionConfiguration()
-        );
-        incomingSession.setConnection(connection);
-        if (xmppServer.getConnectionConfiguration().getChannelEncryption() == ChannelEncryption.REQUIRED) {
-            incomingSession.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(connection));
-        }
-        incomingSession.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection));
+    protected IncomingSession createSession() throws Exception {
+        return new IncomingSession(getServer());
     }
 
     @Override
-    public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-        connection.close();
-    }
-
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        connection.close();
+    protected void notifyServer(IncomingSession session) {
+        getServer().newIncomingSession(session);
     }
 }

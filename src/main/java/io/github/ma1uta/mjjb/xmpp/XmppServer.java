@@ -21,6 +21,7 @@ import io.github.ma1uta.mjjb.RouterFactory;
 import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.XmppConfig;
 import io.github.ma1uta.mjjb.netty.NettyBuilder;
+import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
 import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import io.github.ma1uta.mjjb.xmpp.netty.XmppServerInitializer;
 import io.netty.channel.Channel;
@@ -31,6 +32,7 @@ import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.net.ConnectionConfiguration;
 import rocks.xmpp.core.stanza.model.Stanza;
+import rocks.xmpp.core.stream.model.StreamElement;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
@@ -38,7 +40,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import javax.net.ssl.SSLContext;
-import javax.xml.bind.JAXBException;
 
 /**
  * XMPP server with S2S support.
@@ -50,6 +51,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     private final Set<IncomingSession> initialIncomingSessions = new HashSet<>();
     private final Map<String, IncomingSession> establishedIncomingSessions = new HashMap<>();
     private final Map<String, OutgoingSession> establishedOutgoingSessions = new HashMap<>();
+    private ServerDialback dialback;
     private Jdbi jdbi;
     private XmppConfig config;
     private RouterFactory routerFactory;
@@ -75,28 +77,23 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     /**
      * Create new incoming session.
      *
-     * @return new incoming session.
-     * @throws JAXBException when cannot create xml unmarshaller/marshaller.
+     * @param session a new incoming session.
      */
-    public IncomingSession newIncomingSession() throws JAXBException {
+    public void newIncomingSession(IncomingSession session) {
         LOGGER.debug("New incoming session.");
-        IncomingSession incomingSession = new IncomingSession(this);
-        getInitialIncomingSessions().add(incomingSession);
-        return incomingSession;
+        getInitialIncomingSessions().add(session);
     }
 
     /**
      * Create new outgoing session.
      *
-     * @param jid remote target.
-     * @return outgoint session.
-     * @throws JAXBException when cannote create xml unmarshaller/marshaller.
+     * @param session a new outgoing session.
      */
-    public OutgoingSession newOutgoingSession(Jid jid) throws JAXBException {
-        LOGGER.debug("New outgoing session to {}.", jid.toString());
-        OutgoingSession outgoingSession = new OutgoingSession(this, jid);
-        getEstablishedOutgoingSessions().put(jid.getDomain(), outgoingSession);
-        return outgoingSession;
+    public void newOutgoingSession(OutgoingSession session) {
+        String target = session.getJid().getDomain();
+        LOGGER.debug("New outgoing session to {}.", target);
+        getEstablishedOutgoingSessions().put(target, session);
+        session.handshake();
     }
 
     public Set<IncomingSession> getInitialIncomingSessions() {
@@ -128,7 +125,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      */
     public void establish(Jid jid, IncomingSession incomingSession) {
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Establish incoming session from {}", jid.toString());
+            LOGGER.debug("Establish incoming session from {}", jid.getDomain());
         }
         incomingSession.setJid(jid);
         initialIncomingSessions.remove(incomingSession);
@@ -171,15 +168,21 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      * @param message outgoing stanza.
      */
     public void send(Stanza message) {
-        OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(message.getTo().getDomain());
-        if (outgoingSession == null) {
-            outgoingSession = connect(message.getTo());
-        }
-        sendInEventLook(outgoingSession, message);
+        send(message.getTo(), message);
     }
 
-    private void sendInEventLook(OutgoingSession outgoingSession, Stanza stanza) {
-        outgoingSession.getExecutor().execute(() -> outgoingSession.getConnection().send(stanza));
+    /**
+     * Send outgoing message.
+     *
+     * @param to            remote address.
+     * @param streamElement message.
+     */
+    public void send(Jid to, StreamElement streamElement) {
+        sendInEventLoop(getSession(to), streamElement);
+    }
+
+    private void sendInEventLoop(OutgoingSession outgoingSession, StreamElement streamElement) {
+        outgoingSession.getExecutor().execute(() -> outgoingSession.getConnection().send(streamElement));
     }
 
     private OutgoingSession connect(Jid jid) {
@@ -187,11 +190,20 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         return getEstablishedOutgoingSessions().get(jid.getDomain());
     }
 
+    private OutgoingSession getSession(Jid to) {
+        OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(to.getDomain());
+        if (outgoingSession == null) {
+            outgoingSession = connect(to);
+        }
+        return outgoingSession;
+    }
+
     @Override
     public void init(Jdbi jdbi, XmppConfig config, RouterFactory routerFactory) throws Exception {
         this.jdbi = jdbi;
         this.config = config;
         this.routerFactory = routerFactory;
+        this.dialback = new ServerDialback(this);
         initSSL(config);
         initRouters();
     }
@@ -207,8 +219,45 @@ public class XmppServer implements NetworkServer<XmppConfig> {
 
     }
 
+    /**
+     * Provides ServerDialback mechanism.
+     *
+     * @return dialback service.
+     */
+    public ServerDialback dialback() {
+        return dialback;
+    }
+
     @Override
     public void run() {
         this.channel = NettyBuilder.createServer(config.getDomain(), config.getPort(), new XmppServerInitializer(this), null);
+    }
+
+    /**
+     * Remove closed session.
+     *
+     * @param session session to remove.
+     */
+    public void remove(Session session) {
+        if (session instanceof OutgoingSession) {
+            getEstablishedOutgoingSessions().remove(session.getJid().getDomain());
+        } else if (session instanceof IncomingSession) {
+            if (session.getJid() != null) {
+                getEstablishedIncomingSessions().remove(session.getJid().getDomain());
+            } else {
+                getInitialIncomingSessions().remove(session);
+            }
+        } else {
+            LOGGER.error("Unknown session.");
+        }
+    }
+
+    /**
+     * Process incoming stanzas.
+     *
+     * @param stanza incoming stanzas.
+     */
+    public void process(Stanza stanza) {
+        routerFactory.process(stanza);
     }
 }

@@ -258,6 +258,11 @@
             <artifactId>commons-collections4</artifactId>
             <version>4.2</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.8.1</version>
+        </dependency>
 
         <!-- Logs -->
         <dependency>
@@ -310,6 +315,18 @@
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
             <version>${jackson}</version>
+        </dependency>
+
+        <!-- cache -->
+        <dependency>
+            <groupId>org.cache2k</groupId>
+            <artifactId>cache2k-api</artifactId>
+            <version>1.2.0.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>org.cache2k</groupId>
+            <artifactId>cache2k-core</artifactId>
+            <version>1.2.0.Final</version>
         </dependency>
     </dependencies>
 
