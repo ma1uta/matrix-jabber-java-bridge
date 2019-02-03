@@ -32,7 +32,7 @@
 
         <jackson>2.9.8</jackson>
         <jersey>2.27</jersey>
-        <netty>4.1.32.Final</netty>
+        <netty>4.1.33.Final</netty>
         <babbler>0.8.0</babbler>
     </properties>
 
@@ -119,11 +119,6 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec-http2</artifactId>
-            <version>${netty}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-resolver-dns</artifactId>
             <version>${netty}</version>
         </dependency>
 

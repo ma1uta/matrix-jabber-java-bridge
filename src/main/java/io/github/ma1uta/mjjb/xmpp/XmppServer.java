@@ -54,6 +54,11 @@ public class XmppServer implements NetworkServer<XmppConfig> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(XmppServer.class);
 
+    /**
+     * Default XMPP S2S port.
+     */
+    static final int DEFAULT_S2S_PORT = 5269;
+
     private final Map<InetSocketAddress, Set<IncomingSession>> incoming = new ConcurrentHashMap<>();
     private final Map<String, Set<OutgoingSession>> outgoing = new ConcurrentHashMap<>();
     private final Map<String, Set<OutgoingSession>> withoutDialback = new HashMap<>();
@@ -63,6 +68,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     private RouterFactory routerFactory;
     private SSLContext sslContext;
     private Channel channel;
+    private SrvNameResolver srvNameResolver;
     private final ConnectionConfiguration connectionConfig = new ConnectionConfiguration() {
         @Override
         public ChannelEncryption getChannelEncryption() {
@@ -187,7 +193,8 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     private void connect(String domain, boolean dialback, StreamElement streamElement) {
         ConcurrentLinkedQueue<StreamElement> queue = new ConcurrentLinkedQueue<>();
         queue.offer(streamElement);
-        NettyBuilder.createClient(domain, 5269, new XmppClientInitializer(this, domain, dialback, queue), null);
+        this.srvNameResolver.resolve(domain,
+            (hostname, port) -> NettyBuilder.createClient(hostname, port, new XmppClientInitializer(this, domain, dialback, queue), null));
     }
 
     private OutgoingSession getSession(String domain) {
@@ -203,6 +210,11 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         this.dialback = new ServerDialback(this);
         initSSL(config);
         initRouters();
+        initDnsResolver();
+    }
+
+    private void initDnsResolver() {
+        this.srvNameResolver = new SrvNameResolver();
     }
 
     private void initSSL(XmppConfig config) throws Exception {
