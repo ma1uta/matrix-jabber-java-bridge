@@ -158,8 +158,8 @@ public class OutgoingSession extends Session {
     /**
      * Try to send all messages.
      */
-    public void tryToSend() {
-        if (initialized.get()) {
+    public synchronized void tryToSend() {
+        if (initialized.get() && !queue.isEmpty()) {
             getExecutor().execute(() -> {
                 while (!queue.isEmpty()) {
                     try {
