@@ -31,7 +31,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
 
         <jackson>2.9.8</jackson>
-        <jersey>2.27</jersey>
+        <jersey>2.28</jersey>
         <netty>4.1.33.Final</netty>
         <babbler>0.8.0</babbler>
     </properties>
@@ -55,7 +55,7 @@
                 <groupId>org.jdbi</groupId>
                 <artifactId>jdbi3-bom</artifactId>
                 <type>pom</type>
-                <version>3.5.1</version>
+                <version>3.6.0</version>
                 <scope>import</scope>
             </dependency>
         </dependencies>
@@ -107,7 +107,7 @@
         <dependency>
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
-            <version>3.6.2</version>
+            <version>3.6.3</version>
         </dependency>
 
         <!-- Netty -->
@@ -246,7 +246,7 @@
         <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
-            <version>3.9.2</version>
+            <version>3.9.3</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.hk2</groupId>
@@ -337,7 +337,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-clean-plugin</artifactId>
-                    <version>3.0.0</version>
+                    <version>3.1.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -347,17 +347,17 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.21.0</version>
+                    <version>2.22.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.0.2</version>
+                    <version>3.1.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
-                    <version>1.4.1</version>
+                    <version>3.0.0-M2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -372,12 +372,12 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.0.2</version>
+                    <version>3.1.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-shade-plugin</artifactId>
-                    <version>3.1.0</version>
+                    <version>3.2.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -387,7 +387,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-site-plugin</artifactId>
-                    <version>3.6</version>
+                    <version>3.7.1</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -401,6 +401,9 @@
                         <configuration>
                             <rules>
                                 <DependencyConvergence/>
+                                <requireMavenVersion>
+                                    <version>3.3.9</version>
+                                </requireMavenVersion>
                             </rules>
                         </configuration>
                         <goals>
@@ -486,14 +489,14 @@
                     <dependency>
                         <groupId>com.puppycrawl.tools</groupId>
                         <artifactId>checkstyle</artifactId>
-                        <version>8.16</version>
+                        <version>8.17</version>
                     </dependency>
                 </dependencies>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.1</version>
+                <version>0.8.2</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
