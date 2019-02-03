@@ -19,6 +19,7 @@ package io.github.ma1uta.mjjb.xmpp;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.stanza.model.Stanza;
+import rocks.xmpp.core.stream.model.StreamElement;
 import rocks.xmpp.core.stream.model.StreamFeatures;
 import rocks.xmpp.core.stream.model.StreamHeader;
 
@@ -36,26 +37,39 @@ public class IncomingSession extends Session {
     }
 
     @Override
-    public boolean handleStream(Object streamElement) throws XmppException {
-        if (super.handleStream(streamElement)) {
-            return true;
-        }
+    public boolean handle(Object streamElement) throws XmppException {
         if (streamElement instanceof StreamHeader) {
             StreamHeader streamHeader = (StreamHeader) streamElement;
-            getXmppServer().establish(streamHeader.getFrom(), this);
+            String streamId = streamHeader.getId() != null ? streamHeader.getId() : UUID.randomUUID().toString();
             // send stream header response
             getConnection().send(StreamHeader.responseServerToServer(
                 Jid.of(getXmppServer().getConfig().getDomain()),
                 streamHeader.getFrom(),
-                UUID.randomUUID().toString(),
+                streamId,
                 Locale.getDefault()
             ));
             // send supported features.
             getConnection().send(new StreamFeatures(getStreamFeaturesManager().getStreamFeatures()));
         }
+
+        switch (getXmppServer().dialback().negotiateIncoming(this, streamElement)) {
+            case FAILED:
+            case IN_PROCESS:
+            case SUCCESS:
+                return false;
+            case IGNORED:
+            default:
+                // nothing to do
+        }
+
         if (streamElement instanceof Stanza) {
             getXmppServer().process((Stanza) streamElement);
         }
         return false;
+    }
+
+    @Override
+    public void send(StreamElement streamElement) {
+        getExecutor().execute(() -> getConnection().send(streamElement));
     }
 }

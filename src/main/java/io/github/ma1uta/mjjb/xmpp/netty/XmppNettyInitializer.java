@@ -72,6 +72,7 @@ public abstract class XmppNettyInitializer<C extends Channel, S extends Session>
             getServer().getConnectionConfiguration()
         );
         session.setConnection(connection);
+        session.setExecutor(channel.eventLoop());
         if (getServer().getConnectionConfiguration().getChannelEncryption() == ChannelEncryption.REQUIRED) {
             session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(getConnection()));
         }

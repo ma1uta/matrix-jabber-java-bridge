@@ -26,8 +26,8 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "db:result")
 public class Result extends DialbackElement {
 
-    public Result(Jid to, Jid from, String key, DialbackType type) {
-        super(to, from, key, type);
+    public Result(String id, Jid to, Jid from, String key, DialbackType type) {
+        super(id, to, from, key, type);
     }
 }
 

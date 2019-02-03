@@ -16,17 +16,33 @@
 
 package io.github.ma1uta.mjjb.xmpp.dialback;
 
-import rocks.xmpp.addr.Jid;
-
-import javax.xml.bind.annotation.XmlRootElement;
-
 /**
- * Dialback verification.
+ * Result of the Server Dialback negotiation.
  */
-@XmlRootElement(name = "db:verify")
-public class Verify extends DialbackElement {
+public enum DialbackNegotiationResult {
 
-    public Verify(String id, Jid to, Jid from, String key, DialbackType type) {
-        super(id, to, from, key, type);
-    }
+    /**
+     * Negotiation has been failed.
+     */
+    FAILED,
+
+    /**
+     * Negotiation has been successfully negotiated.
+     */
+    SUCCESS,
+
+    /**
+     * Negotiation has been successfully negotiated and it needs to restart stream.
+     */
+    RESTART,
+
+    /**
+     * Negotiation in process.
+     */
+    IN_PROCESS,
+
+    /**
+     * Negotiation has been ignored.
+     */
+    IGNORED
 }

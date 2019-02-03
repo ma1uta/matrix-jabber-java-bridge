@@ -30,7 +30,8 @@ import javax.xml.bind.annotation.XmlValue;
 @XmlTransient
 public abstract class DialbackElement implements StreamElement {
 
-    protected DialbackElement(Jid to, Jid from, String text, DialbackType type) {
+    protected DialbackElement(String id, Jid to, Jid from, String text, DialbackType type) {
+        this.id = id;
         this.to = to;
         this.from = from;
         this.text = text;

@@ -34,11 +34,17 @@ import rocks.xmpp.core.net.ConnectionConfiguration;
 import rocks.xmpp.core.stanza.model.Stanza;
 import rocks.xmpp.core.stream.model.StreamElement;
 
+import java.net.InetSocketAddress;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.BiConsumer;
 import javax.net.ssl.SSLContext;
 
 /**
@@ -48,9 +54,9 @@ public class XmppServer implements NetworkServer<XmppConfig> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(XmppServer.class);
 
-    private final Set<IncomingSession> initialIncomingSessions = new HashSet<>();
-    private final Map<String, IncomingSession> establishedIncomingSessions = new HashMap<>();
-    private final Map<String, OutgoingSession> establishedOutgoingSessions = new HashMap<>();
+    private final Map<InetSocketAddress, Set<IncomingSession>> incoming = new ConcurrentHashMap<>();
+    private final Map<String, Set<OutgoingSession>> outgoing = new ConcurrentHashMap<>();
+    private final Map<String, Set<OutgoingSession>> withoutDialback = new HashMap<>();
     private ServerDialback dialback;
     private Jdbi jdbi;
     private XmppConfig config;
@@ -81,7 +87,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      */
     public void newIncomingSession(IncomingSession session) {
         LOGGER.debug("New incoming session.");
-        getInitialIncomingSessions().add(session);
+        getIncoming().computeIfAbsent(session.getConnection().getRemoteAddress(), k -> new HashSet<>()).add(session);
     }
 
     /**
@@ -90,22 +96,25 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      * @param session a new outgoing session.
      */
     public void newOutgoingSession(OutgoingSession session) {
-        String target = session.getJid().getDomain();
-        LOGGER.debug("New outgoing session to {}.", target);
-        getEstablishedOutgoingSessions().put(target, session);
+        LOGGER.debug("New outgoing session.");
+        if (session.isDialbackEnabled()) {
+            getOutgoing().computeIfAbsent(session.getDomain(), k -> new HashSet<>()).add(session);
+        } else {
+            getWithoutDialback().computeIfAbsent(session.getDomain(), k -> new HashSet<>()).add(session);
+        }
         session.handshake();
     }
 
-    public Set<IncomingSession> getInitialIncomingSessions() {
-        return initialIncomingSessions;
+    public Map<InetSocketAddress, Set<IncomingSession>> getIncoming() {
+        return incoming;
     }
 
-    public Map<String, IncomingSession> getEstablishedIncomingSessions() {
-        return establishedIncomingSessions;
+    public Map<String, Set<OutgoingSession>> getOutgoing() {
+        return outgoing;
     }
 
-    public Map<String, OutgoingSession> getEstablishedOutgoingSessions() {
-        return establishedOutgoingSessions;
+    public Map<String, Set<OutgoingSession>> getWithoutDialback() {
+        return withoutDialback;
     }
 
     /**
@@ -117,48 +126,22 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         return connectionConfig;
     }
 
-    /**
-     * Establish session.
-     *
-     * @param jid             remote JID.
-     * @param incomingSession session.
-     */
-    public void establish(Jid jid, IncomingSession incomingSession) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Establish incoming session from {}", jid.getDomain());
-        }
-        incomingSession.setJid(jid);
-        initialIncomingSessions.remove(incomingSession);
-        establishedIncomingSessions.put(jid.getDomain(), incomingSession);
-    }
-
     public XmppConfig getConfig() {
         return config;
     }
 
     @Override
     public void close() throws Exception {
-        getInitialIncomingSessions().forEach(s -> {
+        List<Session> sessionsToRemove = new ArrayList<>();
+        getIncoming().values().forEach(sessionsToRemove::addAll);
+        getOutgoing().values().forEach(sessionsToRemove::addAll);
+        for (Session session : sessionsToRemove) {
             try {
-                s.close();
+                session.close();
             } catch (Exception e) {
-                LOGGER.error("Failed close connection.", e);
+                LOGGER.error("Failed to close session.", e);
             }
-        });
-        getEstablishedIncomingSessions().forEach((jid, s) -> {
-            try {
-                s.close();
-            } catch (Exception e) {
-                LOGGER.error("Failed close connection to " + jid, e);
-            }
-        });
-        getEstablishedOutgoingSessions().forEach((jid, s) -> {
-            try {
-                s.close();
-            } catch (Exception e) {
-                LOGGER.error("Failed close connection to " + jid, e);
-            }
-        });
+        }
         this.channel.close().sync();
     }
 
@@ -178,24 +161,38 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      * @param streamElement message.
      */
     public void send(Jid to, StreamElement streamElement) {
-        sendInEventLoop(getSession(to), streamElement);
+        send(to, streamElement, (domain, element) -> connect(domain, true, element));
     }
 
-    private void sendInEventLoop(OutgoingSession outgoingSession, StreamElement streamElement) {
-        outgoingSession.getExecutor().execute(() -> outgoingSession.getConnection().send(streamElement));
-    }
-
-    private OutgoingSession connect(Jid jid) {
-        NettyBuilder.createClient(jid.getDomain(), 5269, new XmppClientInitializer(this, jid), null);
-        return getEstablishedOutgoingSessions().get(jid.getDomain());
-    }
-
-    private OutgoingSession getSession(Jid to) {
-        OutgoingSession outgoingSession = getEstablishedOutgoingSessions().get(to.getDomain());
-        if (outgoingSession == null) {
-            outgoingSession = connect(to);
+    protected void send(Jid to, StreamElement streamElement, BiConsumer<String, StreamElement> connect) {
+        String domain = to.getDomain();
+        OutgoingSession session = getSession(domain);
+        if (session == null) {
+            connect.accept(domain, streamElement);
+        } else {
+            session.send(streamElement);
         }
-        return outgoingSession;
+    }
+
+    /**
+     * Send outgoing message without dialback.
+     *
+     * @param to            remote address.
+     * @param streamElement message.
+     */
+    public void sendWithoutDialback(Jid to, StreamElement streamElement) {
+        send(to, streamElement, (domain, element) -> connect(domain, false, element));
+    }
+
+    private void connect(String domain, boolean dialback, StreamElement streamElement) {
+        ConcurrentLinkedQueue<StreamElement> queue = new ConcurrentLinkedQueue<>();
+        queue.offer(streamElement);
+        NettyBuilder.createClient(domain, 5269, new XmppClientInitializer(this, domain, dialback, queue), null);
+    }
+
+    private OutgoingSession getSession(String domain) {
+        Set<OutgoingSession> sessions = getOutgoing().get(domain);
+        return sessions != null && !sessions.isEmpty() ? sessions.iterator().next() : null;
     }
 
     @Override
@@ -240,12 +237,18 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      */
     public void remove(Session session) {
         if (session instanceof OutgoingSession) {
-            getEstablishedOutgoingSessions().remove(session.getJid().getDomain());
+            OutgoingSession outgoingSession = (OutgoingSession) session;
+            Map<String, Set<OutgoingSession>> sessionMap = outgoingSession.isDialbackEnabled()
+                ? getOutgoing()
+                : getWithoutDialback();
+            Set<OutgoingSession> sessions = sessionMap.get(session.getDomain());
+            if (sessions != null) {
+                sessions.remove(session);
+            }
         } else if (session instanceof IncomingSession) {
-            if (session.getJid() != null) {
-                getEstablishedIncomingSessions().remove(session.getJid().getDomain());
-            } else {
-                getInitialIncomingSessions().remove(session);
+            Set<IncomingSession> sessions = getIncoming().get(session.getConnection().getRemoteAddress());
+            if (sessions != null) {
+                sessions.remove(session);
             }
         } else {
             LOGGER.error("Unknown session.");

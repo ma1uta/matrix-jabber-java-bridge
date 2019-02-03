@@ -19,23 +19,29 @@ package io.github.ma1uta.mjjb.xmpp.netty;
 import io.github.ma1uta.mjjb.xmpp.OutgoingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.Channel;
-import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.stream.model.StreamElement;
+
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * XMPP server netty channel initializer.
  */
 public class XmppClientInitializer extends XmppNettyInitializer<Channel, OutgoingSession> {
 
-    private final Jid jid;
+    private final String domain;
+    private final boolean dialback;
+    private final ConcurrentLinkedQueue<StreamElement> queue;
 
-    public XmppClientInitializer(XmppServer xmppServer, Jid jid) {
+    public XmppClientInitializer(XmppServer xmppServer, String domain, boolean dialback, ConcurrentLinkedQueue<StreamElement> queue) {
         super(xmppServer);
-        this.jid = jid;
+        this.domain = domain;
+        this.dialback = dialback;
+        this.queue = queue;
     }
 
     @Override
     protected OutgoingSession createSession() throws Exception {
-        return new OutgoingSession(getServer(), jid);
+        return new OutgoingSession(getServer(), domain, dialback, queue);
     }
 
     @Override

@@ -121,6 +121,11 @@
             <artifactId>netty-codec-http2</artifactId>
             <version>${netty}</version>
         </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns</artifactId>
+            <version>${netty}</version>
+        </dependency>
 
         <!-- Xmpp -->
         <dependency>
