@@ -16,7 +16,9 @@
 
 package io.github.ma1uta.mjjb.xmpp;
 
+import io.github.ma1uta.mjjb.netty.NettyBuilder;
 import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
+import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.stream.model.StreamElement;
@@ -75,21 +77,13 @@ public class OutgoingSession extends Session {
 
     @Override
     public boolean handle(Object streamElement) throws XmppException {
-        switch (getXmppServer().dialback().negotiateOutgoing(this, streamElement)) {
-            case IN_PROCESS:
-            case SUCCESS:
-                return false;
-            case RESTART:
-                return true;
-            case FAILED:
-                throw new XmppException("Dialback was failed.");
-            case IGNORED:
-            default:
-                // nothing to do
+        if (streamElement instanceof StreamHeader) {
+            return false;
         }
         if (streamElement instanceof Proceed) {
             try {
                 getConnection().secureConnection();
+                handshake();
                 return true;
             } catch (Exception e) {
                 LOGGER.error("Failed to secure connection", e);
@@ -99,6 +93,7 @@ public class OutgoingSession extends Session {
         if (StreamCompression.COMPRESSED.equals(streamElement)) {
             try {
                 getConnection().compressConnection(compressMethod, null);
+                handshake();
                 return true;
             } catch (Exception e) {
                 LOGGER.error("Failed to compress session.", e);
@@ -108,8 +103,11 @@ public class OutgoingSession extends Session {
         if (streamElement instanceof StreamFeatures) {
             StreamFeatures features = (StreamFeatures) streamElement;
             for (Object feature : features.getFeatures()) {
+                /*if (feature instanceof Dialback) {
+                    return false;
+                }*/
                 if (feature instanceof StartTls) {
-                    getConnection().send(new StartTls());
+                    sendDirect(new StartTls());
                     return false;
                 }
                 if (feature instanceof CompressionFeature) {
@@ -118,11 +116,21 @@ public class OutgoingSession extends Session {
                         compressMethod = compress.getMethods().get(0);
                     }
                     if (compressMethod != null) {
-                        getConnection().send(new StreamCompression.Compress(compressMethod));
+                        sendDirect(new StreamCompression.Compress(compressMethod));
                         return false;
                     }
                 }
             }
+        }
+
+        switch (getXmppServer().dialback().negotiateOutgoing(this, streamElement)) {
+            case IN_PROCESS:
+            case SUCCESS:
+            case RESTART:
+            case FAILED:
+            case IGNORED:
+            default:
+                // nothing to do
         }
         // send all queued stanzas.
         initialized.compareAndSet(false, true);
@@ -139,20 +147,37 @@ public class OutgoingSession extends Session {
             Jid.ofDomain(getXmppServer().getConfig().getDomain()),
             Jid.ofDomain(getDomain()),
             Locale.ENGLISH,
-            new QName(ServerDialback.NAMESPACE, ServerDialback.LOCALPART))
+            new QName(ServerDialback.NAMESPACE, "", ServerDialback.LOCALPART))
 
             : StreamHeader.initialServerToServer(
             Jid.ofDomain(getXmppServer().getConfig().getDomain()),
             Jid.ofDomain(getDomain()),
             Locale.ENGLISH
         );
-        getConnection().send(header);
+        getExecutor().execute(() -> {
+            try {
+                getConnection().open(header);
+            } catch (Exception e) {
+                LOGGER.error("Unable to open connection.", e);
+                throw e;
+            }
+        });
     }
 
     @Override
     public void send(StreamElement streamElement) {
         queue.offer(streamElement);
         tryToSend();
+    }
+
+    protected void sendDirect(StreamElement streamElement) {
+        getExecutor().execute(() -> {
+            try {
+                getConnection().send(streamElement);
+            } catch (Exception e) {
+                LOGGER.error("Failed to send message.", e);
+            }
+        });
     }
 
     /**
@@ -163,13 +188,23 @@ public class OutgoingSession extends Session {
             getExecutor().execute(() -> {
                 while (!queue.isEmpty()) {
                     try {
-                        getConnection().send(queue.poll()).toCompletableFuture().join();
+                        getConnection().send(queue.poll());
                     } catch (Exception e) {
                         LOGGER.error("Failed to send message.", e);
-                        return;
                     }
                 }
             });
         }
+        if (!initialized.get()) {
+            connect();
+        }
+    }
+
+    /**
+     * Connect to the target domain.
+     */
+    public void connect() {
+        getXmppServer().getSrvNameResolver().resolve(getDomain(),
+            (hostname, port) -> NettyBuilder.createClient(hostname, port, new XmppClientInitializer(getXmppServer(), this), null));
     }
 }

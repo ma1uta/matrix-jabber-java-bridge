@@ -69,10 +69,6 @@ public abstract class Session implements AutoCloseable {
      * @throws XmppException when exception occured.
      */
     public boolean handleStream(Object streamElement) throws XmppException {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(streamElement.toString());
-        }
-
         if (streamElement instanceof StreamElement
             && getStreamFeaturesManager().handleElement((StreamElement) streamElement) == StreamNegotiationResult.RESTART) {
             return true;

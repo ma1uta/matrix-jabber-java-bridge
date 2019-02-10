@@ -16,42 +16,52 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
+import io.github.ma1uta.mjjb.Loggers;
 import io.github.ma1uta.mjjb.xmpp.OutgoingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.Channel;
-import rocks.xmpp.core.stream.model.StreamElement;
-
-import java.util.concurrent.ConcurrentLinkedQueue;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import org.slf4j.LoggerFactory;
 
 /**
  * XMPP server netty channel initializer.
  */
 public class XmppClientInitializer extends XmppNettyInitializer<Channel, OutgoingSession> {
 
-    private final String domain;
-    private final boolean dialback;
-    private final ConcurrentLinkedQueue<StreamElement> queue;
+    private final OutgoingSession outgoingSession;
 
-    public XmppClientInitializer(XmppServer xmppServer, String domain, boolean dialback, ConcurrentLinkedQueue<StreamElement> queue) {
+    public XmppClientInitializer(XmppServer xmppServer, OutgoingSession outgoingSession) {
         super(xmppServer);
-        this.domain = domain;
-        this.dialback = dialback;
-        this.queue = queue;
+        this.outgoingSession = outgoingSession;
     }
 
     @Override
-    protected OutgoingSession createSession() throws Exception {
-        return new OutgoingSession(getServer(), domain, dialback, queue);
-    }
+    protected void initChannel(Channel ch) throws Exception {
+        initConnection(ch, outgoingSession);
+        ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                outgoingSession.handshake();
+            }
 
-    @Override
-    protected void notifyServer(OutgoingSession session) {
-        getServer().newOutgoingSession(session);
-    }
+            @Override
+            public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
+                outgoingSession.close();
+            }
 
-    @Override
-    protected void initConnection(Channel channel, OutgoingSession session) {
-        super.initConnection(channel, session);
-        session.setExecutor(channel.eventLoop());
+            @Override
+            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                outgoingSession.close();
+            }
+
+            @Override
+            public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+                if (evt instanceof Throwable) {
+                    LoggerFactory.getLogger(Loggers.LOGGER).error("Exception.", (Throwable) evt);
+                }
+                super.userEventTriggered(ctx, evt);
+            }
+        });
     }
 }

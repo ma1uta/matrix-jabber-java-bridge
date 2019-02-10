@@ -51,15 +51,20 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
         return getJdbi().inTransaction(h -> {
             RoomDao roomDao = h.attach(RoomDao.class);
             String roomId = roomMember.getRoomId().toString();
-            DirectRoom room = roomDao.findDirectRoom(roomId);
+            DirectRoom room = roomDao.findDirectRoomByRoomId(roomId);
             String jid = extractJidFromMxid(invitedUser);
             if (room == null) {
                 roomDao.createDirectRoom(roomId, roomMember.getSender().toString(), jid);
             }
             roomDao.updateMatrixSubscription(roomId, true);
 
-            Presence presence = new Presence(Jid.of(jid), Presence.Type.SUBSCRIBE, null);
-            getXmppServer().send(ServerPresence.from(presence));
+            try {
+                Presence presence = new Presence(Jid.of(jid), Presence.Type.SUBSCRIBE, null);
+                getXmppServer().send(ServerPresence.from(presence));
+            } catch (Exception e) {
+                LOGGER.error("Unable to send message.", e);
+                return false;
+            }
             return true;
         });
     }

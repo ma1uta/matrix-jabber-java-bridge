@@ -22,8 +22,8 @@ import io.github.ma1uta.mjjb.config.Cert;
 import io.github.ma1uta.mjjb.config.XmppConfig;
 import io.github.ma1uta.mjjb.netty.NettyBuilder;
 import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
-import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import io.github.ma1uta.mjjb.xmpp.netty.XmppServerInitializer;
+import io.github.ma1uta.mjjb.xmpp.router.DirectInviteRouter;
 import io.netty.channel.Channel;
 import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
@@ -44,7 +44,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.BiConsumer;
 import javax.net.ssl.SSLContext;
 
 /**
@@ -108,7 +107,6 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         } else {
             getWithoutDialback().computeIfAbsent(session.getDomain(), k -> new HashSet<>()).add(session);
         }
-        session.handshake();
     }
 
     public Map<InetSocketAddress, Set<IncomingSession>> getIncoming() {
@@ -155,8 +153,9 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      * Send outgoing message.
      *
      * @param message outgoing stanza.
+     * @throws Exception if message sending was failed.
      */
-    public void send(Stanza message) {
+    public void send(Stanza message) throws Exception {
         send(message.getTo(), message);
     }
 
@@ -165,19 +164,20 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      *
      * @param to            remote address.
      * @param streamElement message.
+     * @throws Exception if message sending was failed.
      */
-    public void send(Jid to, StreamElement streamElement) {
-        send(to, streamElement, (domain, element) -> connect(domain, true, element));
+    public void send(Jid to, StreamElement streamElement) throws Exception {
+        send(to, streamElement, false);
     }
 
-    protected void send(Jid to, StreamElement streamElement, BiConsumer<String, StreamElement> connect) {
+    protected void send(Jid to, StreamElement streamElement, boolean dialback) throws Exception {
         String domain = to.getDomain();
         OutgoingSession session = getSession(domain);
         if (session == null) {
-            connect.accept(domain, streamElement);
-        } else {
-            session.send(streamElement);
+            session = new OutgoingSession(this, to.getDomain(), dialback, new ConcurrentLinkedQueue<>());
+            newOutgoingSession(session);
         }
+        session.send(streamElement);
     }
 
     /**
@@ -185,16 +185,10 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      *
      * @param to            remote address.
      * @param streamElement message.
+     * @throws Exception if message sending was failed.
      */
-    public void sendWithoutDialback(Jid to, StreamElement streamElement) {
-        send(to, streamElement, (domain, element) -> connect(domain, false, element));
-    }
-
-    private void connect(String domain, boolean dialback, StreamElement streamElement) {
-        ConcurrentLinkedQueue<StreamElement> queue = new ConcurrentLinkedQueue<>();
-        queue.offer(streamElement);
-        this.srvNameResolver.resolve(domain,
-            (hostname, port) -> NettyBuilder.createClient(hostname, port, new XmppClientInitializer(this, domain, dialback, queue), null));
+    public void sendWithoutDialback(Jid to, StreamElement streamElement) throws Exception {
+        send(to, streamElement, false);
     }
 
     private OutgoingSession getSession(String domain) {
@@ -225,7 +219,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
     }
 
     private void initRouters() {
-
+        routerFactory.addXmppRouter(new DirectInviteRouter());
     }
 
     /**
@@ -274,5 +268,9 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      */
     public void process(Stanza stanza) {
         routerFactory.process(stanza);
+    }
+
+    public SrvNameResolver getSrvNameResolver() {
+        return srvNameResolver;
     }
 }

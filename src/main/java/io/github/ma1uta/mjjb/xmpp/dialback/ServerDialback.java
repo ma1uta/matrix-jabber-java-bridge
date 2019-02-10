@@ -73,9 +73,9 @@ public class ServerDialback {
             .expireAfterWrite(1L, TimeUnit.HOURS)
             .build();
         try {
-            digest = MessageDigest.getInstance("SHA256");
+            digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
-            LOGGER.error("JRE doesn't support the SHA256.", e);
+            LOGGER.error("JRE doesn't support the SHA-256.", e);
             throw new RuntimeException(e);
         }
     }
@@ -188,7 +188,12 @@ public class ServerDialback {
         if (streamElement instanceof Result) {
             Result result = (Result) streamElement;
             String id = result.getId() != null ? result.getId() : UUID.randomUUID().toString();
-            getServer().sendWithoutDialback(result.getTo(), new Verify(id, result.getFrom(), result.getTo(), result.getText(), null));
+            try {
+                getServer().sendWithoutDialback(result.getTo(), new Verify(id, result.getFrom(), result.getTo(), result.getText(), null));
+            } catch (Exception e) {
+                LOGGER.error("Unable to send message", e);
+                return DialbackNegotiationResult.FAILED;
+            }
             return DialbackNegotiationResult.IN_PROCESS;
         }
 

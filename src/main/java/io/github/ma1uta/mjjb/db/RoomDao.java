@@ -28,14 +28,24 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 public interface RoomDao {
 
     /**
-     * Find 1:1 room be id.
+     * Find 1:1 room by id.
      *
      * @param roomId room id.
-     * @return Room or @{code null}.
+     * @return Room or {@code null}.
      */
     @SqlQuery("select * from direct_room where room_id = :roomId")
     @RegisterRowMapper(DirectRoomMapper.class)
-    DirectRoom findDirectRoom(@Bind("roomId") String roomId);
+    DirectRoom findDirectRoomByRoomId(@Bind("roomId") String roomId);
+
+    /**
+     * Find 1:1 room by xmpp user.
+     *
+     * @param jid xmpp user.
+     * @return Room or {@code null}.
+     */
+    @SqlQuery("select * from direct_room where xmpp_user = :xmppUser")
+    @RegisterRowMapper(DirectRoomMapper.class)
+    DirectRoom findDirectRoomByJid(@Bind("xmppUser") String jid);
 
     /**
      * Save info about the 1:1 room.

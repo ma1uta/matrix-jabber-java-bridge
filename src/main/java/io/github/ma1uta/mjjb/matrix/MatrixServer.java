@@ -18,7 +18,6 @@ package io.github.ma1uta.mjjb.matrix;
 
 import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.client.AppServiceClient;
-import io.github.ma1uta.matrix.client.MatrixClient;
 import io.github.ma1uta.matrix.client.factory.jaxrs.AppJaxRsRequestFactory;
 import io.github.ma1uta.matrix.client.model.account.RegisterRequest;
 import io.github.ma1uta.matrix.event.RoomMember;
@@ -47,16 +46,12 @@ import rocks.xmpp.core.stanza.model.Message;
 
 import java.net.URI;
 import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import javax.ws.rs.client.ClientBuilder;
 
 /**
@@ -65,7 +60,7 @@ import javax.ws.rs.client.ClientBuilder;
 public class MatrixServer implements NetworkServer<MatrixConfig> {
 
     private MatrixApp matrixApp;
-    private MatrixClient matrixClient;
+    private AppServiceClient matrixClient;
     private SslContext sslContext;
     private MatrixConfig config;
     private Jdbi jdbi;
@@ -90,20 +85,7 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         MatrixConfig config = getConfig();
         if (config.isDisableSslValidation()) {
             SSLContext sslContext = SSLContext.getInstance("TLS");
-
-            sslContext.init(null, new TrustManager[] {new X509TrustManager() {
-                public void checkClientTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
-                }
-
-                public void checkServerTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
-                }
-
-                public X509Certificate[] getAcceptedIssuers() {
-                    return new X509Certificate[0];
-                }
-            }
-            }, new SecureRandom());
-
+            sslContext.init(null, Cert.TRUST_ALL_CERTS, new SecureRandom());
             clientBuilder.sslContext(sslContext);
         }
         this.matrixClient = new AppServiceClient.Builder()
@@ -180,7 +162,7 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         return config;
     }
 
-    public MatrixClient getMatrixClient() {
+    public AppServiceClient getMatrixClient() {
         return matrixClient;
     }
 }

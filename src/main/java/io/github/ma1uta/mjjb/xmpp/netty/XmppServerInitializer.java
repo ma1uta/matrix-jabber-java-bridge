@@ -18,6 +18,8 @@ package io.github.ma1uta.mjjb.xmpp.netty;
 
 import io.github.ma1uta.mjjb.xmpp.IncomingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.SocketChannel;
 
 /**
@@ -30,12 +32,21 @@ public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, I
     }
 
     @Override
-    protected IncomingSession createSession() throws Exception {
-        return new IncomingSession(getServer());
-    }
-
-    @Override
-    protected void notifyServer(IncomingSession session) {
+    protected void initChannel(SocketChannel ch) throws Exception {
+        IncomingSession session = new IncomingSession(getServer());
+        initConnection(ch, session);
         getServer().newIncomingSession(session);
+        ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+
+            @Override
+            public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                session.close();
+            }
+
+            @Override
+            public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                session.close();
+            }
+        });
     }
 }

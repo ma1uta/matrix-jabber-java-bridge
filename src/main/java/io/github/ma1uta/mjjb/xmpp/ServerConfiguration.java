@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.xmpp;
 
+import io.github.ma1uta.mjjb.xmpp.dialback.Dialback;
 import rocks.xmpp.core.bind.model.Bind;
 import rocks.xmpp.core.sasl.model.Mechanisms;
 import rocks.xmpp.core.session.model.Session;
@@ -53,7 +54,8 @@ public final class ServerConfiguration {
                 Bind.class,
                 Mechanisms.class,
                 StartTls.class,
-                StreamCompression.class
+                StreamCompression.class,
+                Dialback.class
             );
         } catch (JAXBException e) {
             throw new DataBindingException(e);

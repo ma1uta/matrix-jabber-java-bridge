@@ -36,7 +36,7 @@ import java.util.function.Function;
  */
 public abstract class AbstractRouter<T> implements Function<T, Boolean> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Loggers.LOGGER);
+    protected static final Logger LOGGER = LoggerFactory.getLogger(Loggers.LOGGER);
 
     private Jdbi jdbi;
     private XmppServer xmppServer;
@@ -83,6 +83,24 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
             return URLDecoder.decode(encodedJid, "UTF-8");
         } catch (UnsupportedEncodingException e) {
             LOGGER.error("Your JRE doesn't have UTF-8 encoder", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Map JID to MXID.
+     *
+     * @param jid JID.
+     * @return MXID.
+     */
+    public String extractMxidFromJid(String jid) {
+        int localpartIndex = jid.indexOf("@");
+        String localpart = localpartIndex == -1 ? jid : jid.substring(0, localpartIndex);
+
+        try {
+            return URLDecoder.decode(localpart, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            LOGGER.error("Your JRE doesn't have UTF-8 decoder", e);
             throw new RuntimeException(e);
         }
     }

@@ -72,8 +72,8 @@ public class SrvNameResolver {
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
-            LOGGER.error(String.format("Unable to resolve SRV record: %s", query), e);
             if (!(e.getCause() instanceof UnknownHostException)) {
+                LOGGER.error(String.format("Unable to resolve SRV record: %s", query), e);
                 throw new RuntimeException(e);
             }
         }
@@ -85,13 +85,20 @@ public class SrvNameResolver {
                 ? Integer.compare(r1.getWeight(), r2.getWeight())
                 : Integer.compare(r1.getPriority(), r2.getPriority()));
         }
+        Exception lastException = null;
         for (Record record : records) {
             try {
                 consumer.accept(record.getHostname(), record.getPort());
+                lastException = null;
                 break;
             } catch (Exception e) {
                 LOGGER.error(String.format("Unable to connect to the %s:%d", record.getHostname(), record.getPort()), e);
+                lastException = e;
             }
+        }
+        if (lastException != null) {
+            LOGGER.error(String.format("Unable to connect to the \"%s\".", domain), lastException);
+            throw new RuntimeException(lastException);
         }
     }
 

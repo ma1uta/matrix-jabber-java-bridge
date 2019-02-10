@@ -92,7 +92,7 @@ public class MatrixAppResource implements ApplicationApi {
                     }
                 });
             } catch (Exception e) {
-                LOGGER.error(String.format("Failed process transaction %s", txnId));
+                LOGGER.error(String.format("Failed process transaction %s", txnId), e);
             }
             asyncResponse.resume(Response.ok(new EmptyResponse()).build());
         });

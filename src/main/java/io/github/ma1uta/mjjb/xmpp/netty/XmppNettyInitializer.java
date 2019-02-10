@@ -19,12 +19,10 @@ package io.github.ma1uta.mjjb.xmpp.netty;
 import io.github.ma1uta.mjjb.xmpp.Session;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.tls.server.StartTlsNegotiator;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 /**
  * Netty initializer.
@@ -35,7 +33,7 @@ import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 public abstract class XmppNettyInitializer<C extends Channel, S extends Session> extends ChannelInitializer<C> {
 
     private final XmppServer server;
-    private NettyChannelConnection connection;
+    private NettyOutgoingChannelConnection connection;
 
     protected XmppNettyInitializer(XmppServer server) {
         this.server = server;
@@ -45,23 +43,12 @@ public abstract class XmppNettyInitializer<C extends Channel, S extends Session>
         return server;
     }
 
-    public NettyChannelConnection getConnection() {
+    public NettyOutgoingChannelConnection getConnection() {
         return connection;
     }
 
-    protected abstract S createSession() throws Exception;
-
-    protected abstract void notifyServer(S session);
-
-    @Override
-    protected void initChannel(C ch) throws Exception {
-        S session = createSession();
-        initConnection(ch, session);
-        notifyServer(session);
-    }
-
     protected void initConnection(C channel, S session) {
-        connection = new NettyChannelConnection(
+        connection = new NettyOutgoingChannelConnection(
             channel,
             session::handleStream,
             session::onRead,
@@ -78,15 +65,4 @@ public abstract class XmppNettyInitializer<C extends Channel, S extends Session>
         }
         session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(getConnection()));
     }
-
-    @Override
-    public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-        connection.close();
-    }
-
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        connection.close();
-    }
-
 }
