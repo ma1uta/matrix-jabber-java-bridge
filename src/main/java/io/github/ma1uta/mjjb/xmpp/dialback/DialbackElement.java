@@ -19,18 +19,22 @@ package io.github.ma1uta.mjjb.xmpp.dialback;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stream.model.StreamElement;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlEnum;
 import javax.xml.bind.annotation.XmlTransient;
+import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.XmlValue;
 
 /**
  * Common dialback stream element.
  */
+@XmlAccessorType(XmlAccessType.FIELD)
 @XmlTransient
 public abstract class DialbackElement implements StreamElement {
 
-    protected DialbackElement(String id, Jid to, Jid from, String text, DialbackType type) {
+    protected DialbackElement(String id, Jid to, Jid from, String text, String type) {
         this.id = id;
         this.to = to;
         this.from = from;
@@ -48,7 +52,7 @@ public abstract class DialbackElement implements StreamElement {
     private Jid from;
 
     @XmlAttribute
-    private DialbackType type;
+    private String type;
 
     @XmlValue
     private String text;
@@ -85,11 +89,11 @@ public abstract class DialbackElement implements StreamElement {
         this.text = text;
     }
 
-    public DialbackType getType() {
+    public String getType() {
         return type;
     }
 
-    public void setType(DialbackType type) {
+    public void setType(String type) {
         this.type = type;
     }
 
@@ -97,7 +101,8 @@ public abstract class DialbackElement implements StreamElement {
     /**
      * Dialback type enumeration.
      */
-    @XmlEnum
+    @XmlType
+    @XmlEnum()
     public enum DialbackType {
 
         /**

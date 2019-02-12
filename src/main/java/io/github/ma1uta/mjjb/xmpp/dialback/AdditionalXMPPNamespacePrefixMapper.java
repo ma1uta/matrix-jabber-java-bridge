@@ -16,21 +16,21 @@
 
 package io.github.ma1uta.mjjb.xmpp.dialback;
 
-import rocks.xmpp.addr.Jid;
-
-import javax.xml.bind.annotation.XmlRootElement;
+import com.sun.xml.internal.bind.marshaller.NamespacePrefixMapper;
 
 /**
- * Dialback verification.
+ * Add capability to write prefix in the dialback elements.
  */
-@XmlRootElement(name = "verify", namespace = ServerDialback.NAMESPACE)
-public class Verify extends DialbackElement {
+public class AdditionalXMPPNamespacePrefixMapper extends NamespacePrefixMapper {
 
-    public Verify() {
-        super(null, null, null, null, null);
-    }
-
-    public Verify(String id, Jid to, Jid from, String key, String type) {
-        super(id, to, from, key, type);
+    @Override
+    public String getPreferredPrefix(String namespaceUri, String suggestion, boolean requirePrefix) {
+        if (requirePrefix) {
+            return suggestion;
+        } else if (ServerDialback.NAMESPACE.equals(namespaceUri)) {
+            return "db";
+        } else {
+            return "";
+        }
     }
 }

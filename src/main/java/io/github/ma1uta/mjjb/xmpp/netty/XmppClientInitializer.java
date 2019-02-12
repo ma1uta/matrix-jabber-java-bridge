@@ -29,30 +29,41 @@ import org.slf4j.LoggerFactory;
  */
 public class XmppClientInitializer extends XmppNettyInitializer<Channel, OutgoingSession> {
 
-    private final OutgoingSession outgoingSession;
+    private final OutgoingSession session;
 
-    public XmppClientInitializer(XmppServer xmppServer, OutgoingSession outgoingSession) {
+    public XmppClientInitializer(XmppServer xmppServer, OutgoingSession session) {
         super(xmppServer);
-        this.outgoingSession = outgoingSession;
+        this.session = session;
     }
 
     @Override
     protected void initChannel(Channel ch) throws Exception {
-        initConnection(ch, outgoingSession);
+        NettyOutgoingChannelConnection connection = new NettyOutgoingChannelConnection(
+            ch,
+            session::handleStream,
+            session::onRead,
+            session::getUnmarshaller,
+            session::onWrite,
+            session::getMarshaller,
+            session::onException,
+            getServer().getConnectionConfiguration()
+        );
+        session.setConnection(connection);
+        session.setExecutor(ch.eventLoop());
         ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                outgoingSession.handshake();
+                session.handshake();
             }
 
             @Override
-            public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-                outgoingSession.close();
+            public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                session.close();
             }
 
             @Override
             public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                outgoingSession.close();
+                session.close();
             }
 
             @Override

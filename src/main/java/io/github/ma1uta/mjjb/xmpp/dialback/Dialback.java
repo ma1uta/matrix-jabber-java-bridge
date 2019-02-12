@@ -29,6 +29,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(factoryMethod = "create")
 public class Dialback extends StreamFeature implements StreamElement {
 
+    private DialbackError value = new DialbackError();
+
     /**
      * The {@code <dialback/>} element.
      */
@@ -40,6 +42,14 @@ public class Dialback extends StreamFeature implements StreamElement {
     @Override
     public String toString() {
         return "Dialback";
+    }
+
+    public DialbackError getValue() {
+        return value;
+    }
+
+    public void setValue(DialbackError value) {
+        this.value = value;
     }
 
     /**

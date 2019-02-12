@@ -16,21 +16,10 @@
 
 package io.github.ma1uta.mjjb.xmpp.dialback;
 
-import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.stream.model.StreamElement;
 
 import javax.xml.bind.annotation.XmlRootElement;
 
-/**
- * Dialback verification.
- */
-@XmlRootElement(name = "verify", namespace = ServerDialback.NAMESPACE)
-public class Verify extends DialbackElement {
-
-    public Verify() {
-        super(null, null, null, null, null);
-    }
-
-    public Verify(String id, Jid to, Jid from, String key, String type) {
-        super(id, to, from, key, type);
-    }
+@XmlRootElement(name = "error")
+public class DialbackError implements StreamElement {
 }

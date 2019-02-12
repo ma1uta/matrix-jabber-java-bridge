@@ -21,6 +21,11 @@ import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.compression.ZlibWrapper;
+import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
+import rocks.xmpp.core.net.ChannelEncryption;
+import rocks.xmpp.core.tls.server.StartTlsNegotiator;
+import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 /**
  * XMPP server netty channel initializer.
@@ -34,7 +39,23 @@ public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, I
     @Override
     protected void initChannel(SocketChannel ch) throws Exception {
         IncomingSession session = new IncomingSession(getServer());
-        initConnection(ch, session);
+        NettyChannelConnection connection = new NettyChannelConnection(
+            ch,
+            session::handleStream,
+            session::onRead,
+            session::getUnmarshaller,
+            session::onWrite,
+            session::getMarshaller,
+            session::onException,
+            getServer().getConnectionConfiguration()
+        );
+        session.setConnection(connection);
+        session.setExecutor(ch.eventLoop());
+        if (getServer().getConnectionConfiguration().getChannelEncryption() == ChannelEncryption.REQUIRED) {
+            session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(connection));
+        }
+        session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection,
+            ZlibWrapper.GZIP.name().toLowerCase(), ZlibWrapper.ZLIB.name().toLowerCase()));
         getServer().newIncomingSession(session);
         ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
 

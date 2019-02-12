@@ -17,6 +17,7 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.netty.NettyBuilder;
+import io.github.ma1uta.mjjb.xmpp.dialback.Dialback;
 import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
 import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import rocks.xmpp.addr.Jid;
@@ -29,6 +30,7 @@ import rocks.xmpp.core.tls.model.StartTls;
 import rocks.xmpp.extensions.compress.model.StreamCompression;
 import rocks.xmpp.extensions.compress.model.feature.CompressionFeature;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,14 +43,14 @@ import javax.xml.namespace.QName;
 public class OutgoingSession extends Session {
 
     private String compressMethod;
-    private ServerDialback.DialbackResult dialback;
+    private ServerDialback.State dialback;
     private AtomicBoolean initialized = new AtomicBoolean(false);
     private final ConcurrentLinkedQueue<StreamElement> queue;
 
     public OutgoingSession(XmppServer xmppServer, String domain, boolean dialback,
                            ConcurrentLinkedQueue<StreamElement> queue) throws JAXBException {
         super(xmppServer);
-        this.dialback = dialback ? null : ServerDialback.DialbackResult.DISABLED;
+        this.dialback = dialback ? null : ServerDialback.State.DISABLED;
         this.queue = queue;
         setDomain(domain);
     }
@@ -58,7 +60,7 @@ public class OutgoingSession extends Session {
      *
      * @return dialback status.
      */
-    public ServerDialback.DialbackResult dialback() {
+    public ServerDialback.State dialback() {
         return dialback;
     }
 
@@ -67,17 +69,25 @@ public class OutgoingSession extends Session {
      *
      * @param result dialback status.
      */
-    public void dialback(ServerDialback.DialbackResult result) {
+    public void dialback(ServerDialback.State result) {
         this.dialback = result;
     }
 
     public boolean isDialbackEnabled() {
-        return dialback != ServerDialback.DialbackResult.DISABLED;
+        return dialback != ServerDialback.State.DISABLED;
     }
 
     @Override
-    public boolean handle(Object streamElement) throws XmppException {
+    public boolean handleStream(Object streamElement) throws XmppException {
         if (streamElement instanceof StreamHeader) {
+            StreamHeader header = (StreamHeader) streamElement;
+            List<QName> namespaces = header.getAdditionalNamespaces();
+            for (QName namespace : namespaces) {
+                if (ServerDialback.NAMESPACE.equals(namespace.getNamespaceURI())
+                    && ServerDialback.PREFIX.equals(namespace.getPrefix())) {
+                    dialback(ServerDialback.State.SUPPORT);
+                }
+            }
             return false;
         }
         if (streamElement instanceof Proceed) {
@@ -103,9 +113,11 @@ public class OutgoingSession extends Session {
         if (streamElement instanceof StreamFeatures) {
             StreamFeatures features = (StreamFeatures) streamElement;
             for (Object feature : features.getFeatures()) {
-                /*if (feature instanceof Dialback) {
-                    return false;
-                }*/
+                if (feature instanceof Dialback) {
+                    dialback(ServerDialback.State.SUPPORT);
+                }
+            }
+            for (Object feature : features.getFeatures()) {
                 if (feature instanceof StartTls) {
                     sendDirect(new StartTls());
                     return false;
@@ -124,17 +136,21 @@ public class OutgoingSession extends Session {
         }
 
         switch (getXmppServer().dialback().negotiateOutgoing(this, streamElement)) {
-            case IN_PROCESS:
-            case SUCCESS:
             case RESTART:
+                return true;
+            case IN_PROCESS:
             case FAILED:
+                return false;
+            case SUCCESS:
             case IGNORED:
             default:
                 // nothing to do
         }
         // send all queued stanzas.
-        initialized.compareAndSet(false, true);
-        tryToSend();
+        if (ServerDialback.State.DISABLED.equals(dialback()) || ServerDialback.State.TRUSTED.equals(dialback())) {
+            initialized.compareAndSet(false, true);
+            tryToSend();
+        }
         return false;
     }
 
@@ -147,7 +163,7 @@ public class OutgoingSession extends Session {
             Jid.ofDomain(getXmppServer().getConfig().getDomain()),
             Jid.ofDomain(getDomain()),
             Locale.ENGLISH,
-            new QName(ServerDialback.NAMESPACE, "", ServerDialback.LOCALPART))
+            new QName(ServerDialback.NAMESPACE, "", ServerDialback.PREFIX))
 
             : StreamHeader.initialServerToServer(
             Jid.ofDomain(getXmppServer().getConfig().getDomain()),
@@ -170,7 +186,12 @@ public class OutgoingSession extends Session {
         tryToSend();
     }
 
-    protected void sendDirect(StreamElement streamElement) {
+    /**
+     * Send message bypassing outgoing queue.
+     *
+     * @param streamElement message to send.
+     */
+    public void sendDirect(StreamElement streamElement) {
         getExecutor().execute(() -> {
             try {
                 getConnection().send(streamElement);

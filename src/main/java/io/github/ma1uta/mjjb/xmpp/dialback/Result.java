@@ -23,10 +23,14 @@ import javax.xml.bind.annotation.XmlRootElement;
 /**
  * Dialback key.
  */
-@XmlRootElement(name = "db:result")
+@XmlRootElement(name = "result", namespace = ServerDialback.NAMESPACE)
 public class Result extends DialbackElement {
 
-    public Result(String id, Jid to, Jid from, String key, DialbackType type) {
+    public Result() {
+        super(null, null, null, null, null);
+    }
+
+    public Result(String id, Jid to, Jid from, String key, String type) {
         super(id, to, from, key, type);
     }
 }

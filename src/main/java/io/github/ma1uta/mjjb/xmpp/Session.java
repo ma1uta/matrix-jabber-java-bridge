@@ -17,11 +17,13 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.Loggers;
+import io.github.ma1uta.mjjb.xmpp.dialback.AdditionalXMPPNamespacePrefixMapper;
+import io.github.ma1uta.mjjb.xmpp.dialback.DialbackResultAdapter;
+import io.github.ma1uta.mjjb.xmpp.dialback.DialbackVerifyAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.net.TcpBinding;
-import rocks.xmpp.core.stream.StreamNegotiationResult;
 import rocks.xmpp.core.stream.model.StreamElement;
 import rocks.xmpp.core.stream.server.ServerStreamFeaturesManager;
 
@@ -38,6 +40,9 @@ public abstract class Session implements AutoCloseable {
 
     protected static final Logger LOGGER = LoggerFactory.getLogger(Session.class);
     protected static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
+    private static final DialbackResultAdapter DIALBACK_RESULT_ADAPTER = new DialbackResultAdapter();
+    private static final DialbackVerifyAdapter DIALBACK_VERIFY_ADAPTER = new DialbackVerifyAdapter();
+    private static final AdditionalXMPPNamespacePrefixMapper NAMESPACE_PREFIX_MAPPER = new AdditionalXMPPNamespacePrefixMapper();
 
     private Executor executor;
     private TcpBinding connection;
@@ -51,6 +56,9 @@ public abstract class Session implements AutoCloseable {
         this.xmppServer = xmppServer;
         this.unmarshaller = ServerConfiguration.JAXB_CONTEXT.createUnmarshaller();
         this.marshaller = ServerConfiguration.JAXB_CONTEXT.createMarshaller();
+        this.marshaller.setAdapter(DIALBACK_RESULT_ADAPTER);
+        this.marshaller.setAdapter(DIALBACK_VERIFY_ADAPTER);
+        this.marshaller.setProperty("com.sun.xml.internal.bind.namespacePrefixMapper", NAMESPACE_PREFIX_MAPPER);
     }
 
     public Unmarshaller getUnmarshaller() {
@@ -68,15 +76,7 @@ public abstract class Session implements AutoCloseable {
      * @return {@code true} to restart stream, else {@code false}.
      * @throws XmppException when exception occured.
      */
-    public boolean handleStream(Object streamElement) throws XmppException {
-        if (streamElement instanceof StreamElement
-            && getStreamFeaturesManager().handleElement((StreamElement) streamElement) == StreamNegotiationResult.RESTART) {
-            return true;
-        }
-        return handle(streamElement);
-    }
-
-    protected abstract boolean handle(Object streamElement) throws XmppException;
+    public abstract boolean handleStream(Object streamElement) throws XmppException;
 
     /**
      * Send message.

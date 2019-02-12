@@ -20,9 +20,6 @@ import io.github.ma1uta.mjjb.xmpp.Session;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
-import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
-import rocks.xmpp.core.net.ChannelEncryption;
-import rocks.xmpp.core.tls.server.StartTlsNegotiator;
 
 /**
  * Netty initializer.
@@ -33,7 +30,6 @@ import rocks.xmpp.core.tls.server.StartTlsNegotiator;
 public abstract class XmppNettyInitializer<C extends Channel, S extends Session> extends ChannelInitializer<C> {
 
     private final XmppServer server;
-    private NettyOutgoingChannelConnection connection;
 
     protected XmppNettyInitializer(XmppServer server) {
         this.server = server;
@@ -41,28 +37,5 @@ public abstract class XmppNettyInitializer<C extends Channel, S extends Session>
 
     public XmppServer getServer() {
         return server;
-    }
-
-    public NettyOutgoingChannelConnection getConnection() {
-        return connection;
-    }
-
-    protected void initConnection(C channel, S session) {
-        connection = new NettyOutgoingChannelConnection(
-            channel,
-            session::handleStream,
-            session::onRead,
-            session::getUnmarshaller,
-            session::onWrite,
-            session::getMarshaller,
-            session::onException,
-            getServer().getConnectionConfiguration()
-        );
-        session.setConnection(connection);
-        session.setExecutor(channel.eventLoop());
-        if (getServer().getConnectionConfiguration().getChannelEncryption() == ChannelEncryption.REQUIRED) {
-            session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new StartTlsNegotiator(getConnection()));
-        }
-        session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(getConnection()));
     }
 }

@@ -14,23 +14,21 @@
  * limitations under the License.
  */
 
+/**
+ * Server Dialback (https://xmpp.org/extensions/xep-0220.html).
+ */
+
+@XmlSchema(
+    xmlns = {
+        @XmlNs(prefix = ServerDialback.PREFIX, namespaceURI = ServerDialback.NAMESPACE)
+    },
+    namespace = StreamHeader.STREAM_NAMESPACE,
+    elementFormDefault = XmlNsForm.QUALIFIED
+)
 package io.github.ma1uta.mjjb.xmpp.dialback;
 
-import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.stream.model.StreamHeader;
 
-import javax.xml.bind.annotation.XmlRootElement;
-
-/**
- * Dialback verification.
- */
-@XmlRootElement(name = "verify", namespace = ServerDialback.NAMESPACE)
-public class Verify extends DialbackElement {
-
-    public Verify() {
-        super(null, null, null, null, null);
-    }
-
-    public Verify(String id, Jid to, Jid from, String key, String type) {
-        super(id, to, from, key, type);
-    }
-}
+import javax.xml.bind.annotation.XmlNs;
+import javax.xml.bind.annotation.XmlNsForm;
+import javax.xml.bind.annotation.XmlSchema;

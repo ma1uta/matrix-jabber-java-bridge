@@ -25,7 +25,8 @@ import org.cache2k.Cache;
 import org.cache2k.Cache2kBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import rocks.xmpp.core.stream.model.StreamHeader;
+import rocks.xmpp.addr.Jid;
+import rocks.xmpp.core.net.TcpBinding;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -53,7 +54,7 @@ public class ServerDialback {
     /**
      * Dialback prefix.
      */
-    public static final String LOCALPART = "db";
+    public static final String PREFIX = "db";
 
     private static final long CACHE_CAPACITY = 100L;
     private static final int KEY_LENGTH = 12;
@@ -124,7 +125,32 @@ public class ServerDialback {
      * @return {@code true} if connection is verified and trusted else {@code false}.
      */
     public DialbackNegotiationResult negotiateOutgoing(OutgoingSession session, Object streamElement) {
-        DialbackResult status = session.dialback();
+        State status = session.dialback();
+
+        // pass if validated.
+        if (State.TRUSTED == status || State.DISABLED == status) {
+            return DialbackNegotiationResult.SUCCESS;
+        }
+
+        // initiate dialback negotiation.
+        if (State.SUPPORT.equals(status)) {
+            session.dialback(State.SENT);
+            session.sendDirect(new Result(
+                UUID.randomUUID().toString(),                       // id
+                Jid.of(getServer().getConfig().getDomain()),        // from
+                Jid.of(session.getDomain()),                        // to
+                newKey(session.getConnection().getStreamId()),      // key
+                null));
+            return DialbackNegotiationResult.IN_PROCESS;
+        }
+
+        if (status == State.SENT && streamElement instanceof Result) {
+            Result result = (Result) streamElement;
+            if (DialbackElement.DialbackType.valid == DialbackElement.DialbackType.valueOf(result.getType())) {
+                session.dialback(State.TRUSTED);
+                return DialbackNegotiationResult.RESTART;
+            }
+        }
 
         if (streamElement instanceof Verify) {
             Verify verify = (Verify) streamElement;
@@ -145,46 +171,17 @@ public class ServerDialback {
             }
         }
 
-        // pass if validated.
-        if (status == DialbackResult.TRUSTED || !session.isDialbackEnabled()) {
-            return DialbackNegotiationResult.SUCCESS;
-        }
-
-        // initiate dialback negotiation.
-        if (status == null && streamElement instanceof StreamHeader) {
-            StreamHeader header = (StreamHeader) streamElement;
-            session.getConnection()
-                .send(new Result(UUID.randomUUID().toString(), header.getFrom(), header.getTo(), newKey(header.getId()), null));
-            session.dialback(DialbackResult.SENT);
-            return DialbackNegotiationResult.IN_PROCESS;
-        }
-
-        if (status == DialbackResult.SENT && streamElement instanceof Result) {
-            Result result = (Result) streamElement;
-            if (DialbackElement.DialbackType.valid == result.getType()) {
-                session.dialback(DialbackResult.TRUSTED);
-                if (!session.isDialbackEnabled()) {
-                    try {
-                        session.close();
-                    } catch (Exception e) {
-                        LOGGER.error("Failed to close session.", e);
-                    }
-                }
-                return DialbackNegotiationResult.RESTART;
-            }
-        }
-
         return DialbackNegotiationResult.FAILED;
     }
 
     /**
      * Negotiate with the incoming connection.
      *
-     * @param session       incoming session.
+     * @param connection    incoming connection.
      * @param streamElement response from the remote server.
      * @return {@code true} if connection is verified and trusted else {@code false}.
      */
-    public DialbackNegotiationResult negotiateIncoming(IncomingSession session, Object streamElement) {
+    public DialbackNegotiationResult negotiateIncoming(TcpBinding connection, Object streamElement) {
         if (streamElement instanceof Result) {
             Result result = (Result) streamElement;
             String id = result.getId() != null ? result.getId() : UUID.randomUUID().toString();
@@ -202,19 +199,19 @@ public class ServerDialback {
             Set<OutgoingSession> outgoingSessions = getServer().getOutgoing().get(verify.getFrom().getDomain());
             OutgoingSession outgoingSession = null;
             for (OutgoingSession item : outgoingSessions) {
-                if (item.dialback() == DialbackResult.SENT && keyCache.get(item.getConnection().getStreamId()) != null) {
+                if (State.SENT == item.dialback() && keyCache.get(item.getConnection().getStreamId()) != null) {
                     outgoingSession = item;
                     break;
                 }
             }
             if (outgoingSession == null) {
-                session.send(
+                connection.send(
                     new Verify(
                         verify.getId(),
                         verify.getFrom(),
                         verify.getTo(),
-                        "",
-                        DialbackElement.DialbackType.invalid
+                        null,
+                        DialbackElement.DialbackType.invalid.name()
                     )
                 );
                 return DialbackNegotiationResult.FAILED;
@@ -224,7 +221,7 @@ public class ServerDialback {
                 ? DialbackElement.DialbackType.valid
                 : DialbackElement.DialbackType.invalid;
             keyCache.remove(streamId);
-            session.send(new Verify(verify.getId(), verify.getFrom(), verify.getTo(), null, type));
+            connection.send(new Verify(verify.getId(), verify.getFrom(), verify.getTo(), null, type.name()));
             return type == DialbackElement.DialbackType.valid ? DialbackNegotiationResult.IN_PROCESS : DialbackNegotiationResult.FAILED;
         }
 
@@ -234,7 +231,7 @@ public class ServerDialback {
     /**
      * Dialback states.
      */
-    public enum DialbackResult {
+    public enum State {
 
         /**
          * Domain was verified and trusted.
@@ -249,6 +246,11 @@ public class ServerDialback {
         /**
          * Domain doesn't use dialback.
          */
-        DISABLED
+        DISABLED,
+
+        /**
+         * Remote server support server dialback.
+         */
+        SUPPORT
     }
 }
