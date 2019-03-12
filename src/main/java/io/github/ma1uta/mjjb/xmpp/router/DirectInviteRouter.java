@@ -28,6 +28,7 @@ import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.stanza.model.Presence;
 
 import java.util.Arrays;
+import java.util.Optional;
 
 /**
  * Process incoming xmpp invite presence.
@@ -54,10 +55,11 @@ public class DirectInviteRouter extends AbstractRouter<Presence> {
             RoomDao roomDao = h.attach(RoomDao.class);
             DirectRoom room = roomDao.findDirectRoomByJid(sender);
 
-            Id senderMxid = Id.valueOf(sender);
-            Id targetMxid = Id.valueOf(target);
-
-            String localpart = targetMxid.getLocalpart();
+            Optional<String> localPart = Id.localPart(target);
+            if (!localPart.isPresent()) {
+                return false;
+            }
+            String localpart = localPart.get();
             AppServiceClient matrixClient = getMatrixServer().getMatrixClient();
 
             UserDao userDao = h.attach(UserDao.class);
@@ -71,12 +73,12 @@ public class DirectInviteRouter extends AbstractRouter<Presence> {
             if (room == null) {
                 CreateRoomRequest createRoomRequest = new CreateRoomRequest();
                 createRoomRequest.setDirect(true);
-                createRoomRequest.setInvite(Arrays.asList(senderMxid, targetMxid));
-                Id roomId = matrixClient.userId(senderMxid).room().create(createRoomRequest).join().getRoomId();
+                createRoomRequest.setInvite(Arrays.asList(sender, target));
+                Id roomId = matrixClient.userId(sender).room().create(createRoomRequest).join().getRoomId();
 
                 room = roomDao.createDirectRoom(roomId.toString(), target, sender);
             }
-            matrixClient.userId(senderMxid).room().joinByIdOrAlias(Id.valueOf(room.getRoomId())).join();
+            matrixClient.userId(sender).room().joinByIdOrAlias(room.getRoomId()).join();
             roomDao.updateXmppSubscription(room.getRoomId(), true);
 
             return true;

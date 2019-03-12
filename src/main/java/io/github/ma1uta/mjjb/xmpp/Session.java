@@ -17,7 +17,6 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.Loggers;
-import io.github.ma1uta.mjjb.xmpp.dialback.AdditionalXMPPNamespacePrefixMapper;
 import io.github.ma1uta.mjjb.xmpp.dialback.DialbackResultAdapter;
 import io.github.ma1uta.mjjb.xmpp.dialback.DialbackVerifyAdapter;
 import org.slf4j.Logger;
@@ -42,7 +41,6 @@ public abstract class Session implements AutoCloseable {
     protected static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
     private static final DialbackResultAdapter DIALBACK_RESULT_ADAPTER = new DialbackResultAdapter();
     private static final DialbackVerifyAdapter DIALBACK_VERIFY_ADAPTER = new DialbackVerifyAdapter();
-    private static final AdditionalXMPPNamespacePrefixMapper NAMESPACE_PREFIX_MAPPER = new AdditionalXMPPNamespacePrefixMapper();
 
     private Executor executor;
     private TcpBinding connection;
@@ -58,7 +56,6 @@ public abstract class Session implements AutoCloseable {
         this.marshaller = ServerConfiguration.JAXB_CONTEXT.createMarshaller();
         this.marshaller.setAdapter(DIALBACK_RESULT_ADAPTER);
         this.marshaller.setAdapter(DIALBACK_VERIFY_ADAPTER);
-        this.marshaller.setProperty("com.sun.xml.internal.bind.namespacePrefixMapper", NAMESPACE_PREFIX_MAPPER);
     }
 
     public Unmarshaller getUnmarshaller() {
@@ -92,7 +89,7 @@ public abstract class Session implements AutoCloseable {
      * @param element stanza.
      */
     public void onRead(String xml, StreamElement element) {
-        STANZA_LOGGER.debug("<< " + xml);
+        STANZA_LOGGER.debug(" IN: " + xml);
     }
 
     /**
@@ -102,7 +99,7 @@ public abstract class Session implements AutoCloseable {
      * @param element stanza.
      */
     public void onWrite(String xml, StreamElement element) {
-        STANZA_LOGGER.debug(">> " + xml);
+        STANZA_LOGGER.debug("OUT: " + xml);
     }
 
     /**

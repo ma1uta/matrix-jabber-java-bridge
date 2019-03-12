@@ -59,13 +59,13 @@ public class MessageRouter extends AbstractRouter<RoomMessage<?>> {
 
         return getJdbi().inTransaction(h -> {
             RoomDao roomDao = h.attach(RoomDao.class);
-            DirectRoom room = roomDao.findDirectRoomByRoomId(message.getRoomId().toString());
+            DirectRoom room = roomDao.findDirectRoomByRoomId(message.getRoomId());
             if (room == null) {
                 return false;
             }
 
             ServerMessage xmppMessage = ServerMessage.from(converter.apply(room.getXmppJid(), message));
-            xmppMessage.setFrom(Jid.of(extractJidFromMxid(message.getSender().toString())));
+            xmppMessage.setFrom(Jid.of(extractJidFromMxid(message.getSender())));
 
             try {
                 getXmppServer().send(xmppMessage);

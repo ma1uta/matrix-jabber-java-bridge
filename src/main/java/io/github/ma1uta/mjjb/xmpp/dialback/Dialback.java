@@ -36,7 +36,7 @@ public class Dialback extends StreamFeature implements StreamElement {
      */
     public static final Dialback INSTANCE = new Dialback();
 
-    private Dialback() {
+    public Dialback() {
     }
 
     @Override

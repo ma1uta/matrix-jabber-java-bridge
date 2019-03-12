@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
+import io.github.ma1uta.mjjb.xmpp.babbler.netty.NettyChannelConnection;
 import io.netty.channel.Channel;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.JdkSslContext;
@@ -24,7 +25,6 @@ import io.netty.handler.ssl.SslHandler;
 import rocks.xmpp.core.net.ConnectionConfiguration;
 import rocks.xmpp.core.stream.StreamHandler;
 import rocks.xmpp.core.stream.model.StreamElement;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;

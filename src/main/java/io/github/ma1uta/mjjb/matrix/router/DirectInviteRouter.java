@@ -50,11 +50,11 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
 
         return getJdbi().inTransaction(h -> {
             RoomDao roomDao = h.attach(RoomDao.class);
-            String roomId = roomMember.getRoomId().toString();
+            String roomId = roomMember.getRoomId();
             DirectRoom room = roomDao.findDirectRoomByRoomId(roomId);
             String jid = extractJidFromMxid(invitedUser);
             if (room == null) {
-                roomDao.createDirectRoom(roomId, roomMember.getSender().toString(), jid);
+                roomDao.createDirectRoom(roomId, roomMember.getSender(), jid);
             }
             roomDao.updateMatrixSubscription(roomId, true);
 

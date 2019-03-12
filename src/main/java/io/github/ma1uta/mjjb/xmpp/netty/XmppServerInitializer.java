@@ -18,6 +18,7 @@ package io.github.ma1uta.mjjb.xmpp.netty;
 
 import io.github.ma1uta.mjjb.xmpp.IncomingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
+import io.github.ma1uta.mjjb.xmpp.babbler.netty.NettyChannelConnection;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.SocketChannel;
@@ -25,7 +26,6 @@ import io.netty.handler.codec.compression.ZlibWrapper;
 import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.tls.server.StartTlsNegotiator;
-import rocks.xmpp.nio.netty.net.NettyChannelConnection;
 
 /**
  * XMPP server netty channel initializer.
