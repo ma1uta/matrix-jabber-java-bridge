@@ -90,7 +90,7 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         }
         this.matrixClient = new AppServiceClient.Builder()
             .requestFactory(new AppJaxRsRequestFactory(clientBuilder.build(), config.getHomeserver()))
-            .userId(Id.valueOf(config.getMasterUserId()))
+            .userId(config.getMasterUserId())
             .accessToken(config.getAsToken())
             .build();
     }
@@ -99,13 +99,14 @@ public class MatrixServer implements NetworkServer<MatrixConfig> {
         try {
             this.jdbi.useTransaction(h -> {
                 UserDao userDao = h.attach(UserDao.class);
-                Id masterId = Id.valueOf(getConfig().getMasterUserId());
-                if (userDao.exist(masterId.getLocalpart()) == 0) {
+                String masterId = getConfig().getMasterUserId();
+                String localpart = Id.localPart(masterId).orElseThrow(() -> new RuntimeException("Wrong master id."));
+                if (userDao.exist(localpart) == 0) {
                     RegisterRequest request = new RegisterRequest();
-                    request.setUsername(masterId.getLocalpart());
+                    request.setUsername(localpart);
                     request.setInhibitLogin(false);
                     getMatrixClient().account().register(request).join();
-                    userDao.create(masterId.getLocalpart());
+                    userDao.create(localpart);
                 }
             });
         } catch (Exception e) {

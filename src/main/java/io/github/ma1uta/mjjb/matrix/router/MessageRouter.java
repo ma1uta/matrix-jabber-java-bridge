@@ -59,7 +59,7 @@ public class MessageRouter extends AbstractRouter<RoomMessage<?>> {
 
         return getJdbi().inTransaction(h -> {
             RoomDao roomDao = h.attach(RoomDao.class);
-            DirectRoom room = roomDao.findDirectRoomByRoomId(message.getRoomId());
+            DirectRoom room = roomDao.findDirectRoomByUserId(message.getSender());
             if (room == null) {
                 return false;
             }

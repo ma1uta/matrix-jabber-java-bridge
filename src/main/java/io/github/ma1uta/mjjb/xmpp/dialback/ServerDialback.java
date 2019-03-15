@@ -137,8 +137,8 @@ public class ServerDialback {
             session.dialback(State.SENT);
             session.sendDirect(new Result(
                 UUID.randomUUID().toString(),                       // id
-                Jid.of(getServer().getConfig().getDomain()),        // from
                 Jid.of(session.getDomain()),                        // to
+                Jid.of(getServer().getConfig().getDomain()),        // from
                 newKey(session.getConnection().getStreamId()),      // key
                 null));
             return DialbackNegotiationResult.IN_PROCESS;
@@ -197,6 +197,10 @@ public class ServerDialback {
         if (streamElement instanceof Verify) {
             Verify verify = (Verify) streamElement;
             Set<OutgoingSession> outgoingSessions = getServer().getOutgoing().get(verify.getFrom().getDomain());
+            if (outgoingSessions == null) {
+                sendVerify(connection, verify, DialbackElement.DialbackType.invalid);
+                return DialbackNegotiationResult.FAILED;
+            }
             OutgoingSession outgoingSession = null;
             for (OutgoingSession item : outgoingSessions) {
                 if (State.SENT == item.dialback() && keyCache.get(item.getConnection().getStreamId()) != null) {
@@ -205,15 +209,7 @@ public class ServerDialback {
                 }
             }
             if (outgoingSession == null) {
-                connection.send(
-                    new Verify(
-                        verify.getId(),
-                        verify.getFrom(),
-                        verify.getTo(),
-                        null,
-                        DialbackElement.DialbackType.invalid.name()
-                    )
-                );
+                sendVerify(connection, verify, DialbackElement.DialbackType.invalid);
                 return DialbackNegotiationResult.FAILED;
             }
             String streamId = outgoingSession.getConnection().getStreamId();
@@ -221,11 +217,23 @@ public class ServerDialback {
                 ? DialbackElement.DialbackType.valid
                 : DialbackElement.DialbackType.invalid;
             keyCache.remove(streamId);
-            connection.send(new Verify(verify.getId(), verify.getFrom(), verify.getTo(), null, type.name()));
+            sendVerify(connection, verify, type);
             return type == DialbackElement.DialbackType.valid ? DialbackNegotiationResult.IN_PROCESS : DialbackNegotiationResult.FAILED;
         }
 
         return DialbackNegotiationResult.IGNORED;
+    }
+
+    protected void sendVerify(TcpBinding connection, Verify verify, DialbackElement.DialbackType type) {
+        connection.send(
+            new Verify(
+                verify.getId(),
+                verify.getFrom(),
+                verify.getTo(),
+                null,
+                type.name()
+            )
+        );
     }
 
     /**

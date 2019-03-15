@@ -28,14 +28,14 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 public interface RoomDao {
 
     /**
-     * Find 1:1 room by id.
+     * Find 1:1 room by matrix user.
      *
-     * @param roomId room id.
+     * @param userId matrix user.
      * @return Room or {@code null}.
      */
-    @SqlQuery("select * from direct_room where room_id = :roomId")
+    @SqlQuery("select * from direct_room where matrix_user = :userId")
     @RegisterRowMapper(DirectRoomMapper.class)
-    DirectRoom findDirectRoomByRoomId(@Bind("roomId") String roomId);
+    DirectRoom findDirectRoomByUserId(@Bind("userId") String userId);
 
     /**
      * Find 1:1 room by xmpp user.

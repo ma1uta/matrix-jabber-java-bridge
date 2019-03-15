@@ -16,7 +16,7 @@
 
 package io.github.ma1uta.mjjb;
 
-import io.github.ma1uta.matrix.UserId;
+import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.mjjb.config.MatrixConfig;
 import io.github.ma1uta.mjjb.matrix.MatrixServer;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
@@ -121,6 +121,6 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
         }
         String prepMxid = encodedJid.replaceAll("%", "=");
         MatrixConfig config = getMatrixServer().getConfig();
-        return UserId.SIGIL + config.getPrefix() + prepMxid + ":" + config.getHomeserver();
+        return Id.Sigil.USER + config.getPrefix() + prepMxid + ":" + config.getHomeserver();
     }
 }

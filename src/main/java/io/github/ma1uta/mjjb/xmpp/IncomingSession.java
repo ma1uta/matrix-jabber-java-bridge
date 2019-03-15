@@ -16,6 +16,7 @@
 
 package io.github.ma1uta.mjjb.xmpp;
 
+import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.stanza.model.Stanza;
@@ -27,6 +28,7 @@ import rocks.xmpp.core.stream.model.StreamHeader;
 import java.util.Locale;
 import java.util.UUID;
 import javax.xml.bind.JAXBException;
+import javax.xml.namespace.QName;
 
 /**
  * XMPP S2S incoming session.
@@ -51,10 +53,12 @@ public class IncomingSession extends Session {
                 Jid.of(getXmppServer().getConfig().getDomain()),
                 streamHeader.getFrom(),
                 streamId,
-                Locale.getDefault()
+                Locale.getDefault(),
+                new QName(ServerDialback.NAMESPACE, "", ServerDialback.PREFIX)
             ));
             // send supported features.
             send(new StreamFeatures(getStreamFeaturesManager().getStreamFeatures()));
+            return false;
         }
 
         switch (getXmppServer().dialback().negotiateIncoming(this.getConnection(), streamElement)) {

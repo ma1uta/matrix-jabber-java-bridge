@@ -17,8 +17,6 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.Loggers;
-import io.github.ma1uta.mjjb.xmpp.dialback.DialbackResultAdapter;
-import io.github.ma1uta.mjjb.xmpp.dialback.DialbackVerifyAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.XmppException;
@@ -39,8 +37,6 @@ public abstract class Session implements AutoCloseable {
 
     protected static final Logger LOGGER = LoggerFactory.getLogger(Session.class);
     protected static final Logger STANZA_LOGGER = LoggerFactory.getLogger(Loggers.STANZA_LOGGER);
-    private static final DialbackResultAdapter DIALBACK_RESULT_ADAPTER = new DialbackResultAdapter();
-    private static final DialbackVerifyAdapter DIALBACK_VERIFY_ADAPTER = new DialbackVerifyAdapter();
 
     private Executor executor;
     private TcpBinding connection;
@@ -54,8 +50,6 @@ public abstract class Session implements AutoCloseable {
         this.xmppServer = xmppServer;
         this.unmarshaller = ServerConfiguration.JAXB_CONTEXT.createUnmarshaller();
         this.marshaller = ServerConfiguration.JAXB_CONTEXT.createMarshaller();
-        this.marshaller.setAdapter(DIALBACK_RESULT_ADAPTER);
-        this.marshaller.setAdapter(DIALBACK_VERIFY_ADAPTER);
     }
 
     public Unmarshaller getUnmarshaller() {

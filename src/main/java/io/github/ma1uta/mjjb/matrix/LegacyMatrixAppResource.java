@@ -16,7 +16,6 @@
 
 package io.github.ma1uta.mjjb.matrix;
 
-import io.github.ma1uta.matrix.Id;
 import io.github.ma1uta.matrix.application.model.TransactionRequest;
 
 import javax.ws.rs.Consumes;
@@ -75,7 +74,7 @@ public class LegacyMatrixAppResource {
     }
 
     /**
-     * See {@link io.github.ma1uta.matrix.application.api.ApplicationApi#rooms(Id, UriInfo, HttpHeaders, AsyncResponse)}.
+     * See {@link io.github.ma1uta.matrix.application.api.ApplicationApi#rooms(String, UriInfo, HttpHeaders, AsyncResponse)}.
      *
      * @param roomAlias     Required. The room alias being queried.
      * @param uriInfo       Information about the request.
@@ -85,7 +84,7 @@ public class LegacyMatrixAppResource {
     @GET
     @Path("/rooms/{roomAlias}")
     public void rooms(
-        @PathParam("roomAlias") Id roomAlias,
+        @PathParam("roomAlias") String roomAlias,
 
         @Context UriInfo uriInfo,
         @Context HttpHeaders httpHeaders,
@@ -95,7 +94,7 @@ public class LegacyMatrixAppResource {
     }
 
     /**
-     * See {@link io.github.ma1uta.matrix.application.api.ApplicationApi#users(Id, UriInfo, HttpHeaders, AsyncResponse)}.
+     * See {@link io.github.ma1uta.matrix.application.api.ApplicationApi#users(String, UriInfo, HttpHeaders, AsyncResponse)}.
      *
      * @param userId        Required. The user ID being queried.
      * @param uriInfo       Information about the request.
@@ -105,7 +104,7 @@ public class LegacyMatrixAppResource {
     @GET
     @Path("/users/{userId}")
     public void users(
-        @PathParam("userId") Id userId,
+        @PathParam("userId") String userId,
 
         @Context UriInfo uriInfo,
         @Context HttpHeaders httpHeaders,

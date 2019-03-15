@@ -74,9 +74,9 @@ public class DirectInviteRouter extends AbstractRouter<Presence> {
                 CreateRoomRequest createRoomRequest = new CreateRoomRequest();
                 createRoomRequest.setDirect(true);
                 createRoomRequest.setInvite(Arrays.asList(sender, target));
-                Id roomId = matrixClient.userId(sender).room().create(createRoomRequest).join().getRoomId();
+                String roomId = matrixClient.userId(sender).room().create(createRoomRequest).join().getRoomId();
 
-                room = roomDao.createDirectRoom(roomId.toString(), target, sender);
+                room = roomDao.createDirectRoom(roomId, target, sender);
             }
             matrixClient.userId(sender).room().joinByIdOrAlias(room.getRoomId()).join();
             roomDao.updateXmppSubscription(room.getRoomId(), true);

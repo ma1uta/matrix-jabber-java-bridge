@@ -102,11 +102,7 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      */
     public void newOutgoingSession(OutgoingSession session) {
         LOGGER.debug("New outgoing session.");
-        if (session.isDialbackEnabled()) {
-            getOutgoing().computeIfAbsent(session.getDomain(), k -> new HashSet<>()).add(session);
-        } else {
-            getWithoutDialback().computeIfAbsent(session.getDomain(), k -> new HashSet<>()).add(session);
-        }
+        getOutgoing().computeIfAbsent(session.getDomain(), k -> new HashSet<>()).add(session);
     }
 
     public Map<InetSocketAddress, Set<IncomingSession>> getIncoming() {

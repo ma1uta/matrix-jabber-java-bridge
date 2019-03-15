@@ -136,11 +136,10 @@ public class OutgoingSession extends Session {
         }
 
         switch (getXmppServer().dialback().negotiateOutgoing(this, streamElement)) {
-            case RESTART:
-                return true;
             case IN_PROCESS:
             case FAILED:
                 return false;
+            case RESTART:
             case SUCCESS:
             case IGNORED:
             default:

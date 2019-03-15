@@ -49,8 +49,7 @@ final class PrefixFreeCanonicalizationWriter implements XMLStreamWriter, Namespa
 
     private static final Collection<String> PREFIXED_NAMESPACES = Arrays.asList(
         SOAPConstants.URI_NS_SOAP_1_1_ENVELOPE,
-        SOAPConstants.URI_NS_SOAP_1_2_ENVELOPE,
-        ServerDialback.NAMESPACE // Support server dialback (XEP-0220)
+        SOAPConstants.URI_NS_SOAP_1_2_ENVELOPE
     );
 
     private final XMLStreamWriter xsw;
@@ -96,8 +95,12 @@ final class PrefixFreeCanonicalizationWriter implements XMLStreamWriter, Namespa
 
     private void writeElement(final String prefix, final String localName, final String namespaceURI, ElementWriter writeElement) throws
         XMLStreamException {
-        if (shouldWriteNamespacePrefix(namespaceURI)) {
-            writeElement.writeElement(prefix, localName, namespaceURI);
+        if (shouldWriteNamespacePrefix(namespaceURI) || isDialback(prefix, namespaceURI)) {
+            String preparedPrefix = prefix;
+            if (ServerDialback.NAMESPACE.equals(namespaceURI) && ("result".equals(localName) || "verify".equals(localName))) {
+                preparedPrefix = "db";
+            }
+            writeElement.writeElement(preparedPrefix, localName, namespaceURI);
         } else {
             // If the writer wants to write a prefix, instead don't write it.
             final String namespaceUriInScope = getNamespaceContext().getNamespaceURI(XMLConstants.DEFAULT_NS_PREFIX);
@@ -172,7 +175,7 @@ final class PrefixFreeCanonicalizationWriter implements XMLStreamWriter, Namespa
     @Override
     public void writeNamespace(final String prefix, final String namespaceURI) throws XMLStreamException {
         // do not write a namespace with a prefix, except it's allowed.
-        if (shouldWriteNamespace(namespaceURI)) {
+        if (shouldWriteNamespace(namespaceURI) || isDialback(prefix, namespaceURI)) {
             xsw.writeNamespace(prefix, namespaceURI);
         } else {
             urisByPrefix.put(prefix, namespaceURI);
@@ -287,12 +290,19 @@ final class PrefixFreeCanonicalizationWriter implements XMLStreamWriter, Namespa
     }
 
     private boolean shouldWriteNamespace(String namespaceURI) {
-        return PREFIXED_NAMESPACES.stream().anyMatch(namespace -> getNamespaceContext().getPrefix(namespace) != null || namespaceURI
-            .equals(namespace)) || (StreamHeader.STREAM_NAMESPACE.equals(namespaceURI) && writeStreamNamespace);
+        return PREFIXED_NAMESPACES.stream().anyMatch(namespace -> getNamespaceContext().getPrefix(namespace) != null
+            || namespaceURI.equals(namespace))
+            || (StreamHeader.STREAM_NAMESPACE.equals(namespaceURI) && writeStreamNamespace);
     }
 
     private boolean shouldWriteNamespacePrefix(String namespaceURI) {
-        return shouldWriteNamespace(namespaceURI) || StreamHeader.STREAM_NAMESPACE.equals(namespaceURI);
+        return shouldWriteNamespace(namespaceURI)
+            || StreamHeader.STREAM_NAMESPACE.equals(namespaceURI)
+            || ServerDialback.NAMESPACE.equals(namespaceURI);
+    }
+
+    private boolean isDialback(String prefix, String namespaceURI) {
+        return ServerDialback.NAMESPACE.equals(namespaceURI) && ServerDialback.PREFIX.equals(prefix);
     }
 
     private interface ElementWriter {

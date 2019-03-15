@@ -99,12 +99,12 @@ public class MatrixAppResource implements ApplicationApi {
     }
 
     @Override
-    public void rooms(Id roomAlias, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
+    public void rooms(String roomAlias, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
         asyncResponse.resume(Response.ok(new EmptyResponse()).build());
     }
 
     @Override
-    public void users(Id userId, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
+    public void users(String userId, UriInfo uriInfo, HttpHeaders httpHeaders, @Suspended AsyncResponse asyncResponse) {
         CompletableFuture.runAsync(() -> {
             try {
                 LOGGER.debug("Create new user {}", userId);
@@ -117,16 +117,18 @@ public class MatrixAppResource implements ApplicationApi {
         });
     }
 
-    private void createUser(Id userId) {
+    private void createUser(String userId) {
         getJdbi().useTransaction(h -> {
             UserDao userDao = h.attach(UserDao.class);
 
-            if (userDao.exist(userId.getLocalpart()) > 0) {
+            String localpart = Id.localPart(userId)
+                .orElseThrow(() -> new MatrixException(ErrorResponse.Code.M_INVALID_USERNAME, "Missing localpart."));
+            if (userDao.exist(localpart) > 0) {
                 return;
             }
 
             RegisterRequest request = new RegisterRequest();
-            request.setUsername(userId.getLocalpart());
+            request.setUsername(localpart);
             request.setInhibitLogin(false);
 
             getMatrixClient().account().register(request).whenCompleteAsync((resp, exc) -> {
@@ -134,7 +136,7 @@ public class MatrixAppResource implements ApplicationApi {
                     LOGGER.error(String.format("Failed create new user: %s", userId), exc);
                     throw new MatrixException(ErrorResponse.Code.M_UNKNOWN, exc.getMessage());
                 }
-                userDao.create(resp.getUserId().getLocalpart());
+                userDao.create(Id.localPart(resp.getUserId()).orElse(""));
             }).join();
         });
     }
