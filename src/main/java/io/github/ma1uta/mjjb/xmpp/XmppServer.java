@@ -37,13 +37,11 @@ import rocks.xmpp.core.stream.model.StreamElement;
 import java.net.InetSocketAddress;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.net.ssl.SSLContext;
 
 /**
@@ -60,7 +58,6 @@ public class XmppServer implements NetworkServer<XmppConfig> {
 
     private final Map<InetSocketAddress, Set<IncomingSession>> incoming = new ConcurrentHashMap<>();
     private final Map<String, Set<OutgoingSession>> outgoing = new ConcurrentHashMap<>();
-    private final Map<String, Set<OutgoingSession>> withoutDialback = new HashMap<>();
     private ServerDialback dialback;
     private Jdbi jdbi;
     private XmppConfig config;
@@ -113,10 +110,6 @@ public class XmppServer implements NetworkServer<XmppConfig> {
         return outgoing;
     }
 
-    public Map<String, Set<OutgoingSession>> getWithoutDialback() {
-        return withoutDialback;
-    }
-
     /**
      * Provide server connection configuration.
      *
@@ -163,28 +156,13 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      * @throws Exception if message sending was failed.
      */
     public void send(Jid to, StreamElement streamElement) throws Exception {
-        send(to, streamElement, false);
-    }
-
-    protected void send(Jid to, StreamElement streamElement, boolean dialback) throws Exception {
         String domain = to.getDomain();
         OutgoingSession session = getSession(domain);
         if (session == null) {
-            session = new OutgoingSession(this, to.getDomain(), dialback, new ConcurrentLinkedQueue<>());
+            session = new OutgoingSession(this, to.getDomain(), true);
             newOutgoingSession(session);
         }
         session.send(streamElement);
-    }
-
-    /**
-     * Send outgoing message without dialback.
-     *
-     * @param to            remote address.
-     * @param streamElement message.
-     * @throws Exception if message sending was failed.
-     */
-    public void sendWithoutDialback(Jid to, StreamElement streamElement) throws Exception {
-        send(to, streamElement, false);
     }
 
     private OutgoingSession getSession(String domain) {
@@ -239,11 +217,10 @@ public class XmppServer implements NetworkServer<XmppConfig> {
      */
     public void remove(Session session) {
         if (session instanceof OutgoingSession) {
-            OutgoingSession outgoingSession = (OutgoingSession) session;
-            Map<String, Set<OutgoingSession>> sessionMap = outgoingSession.isDialbackEnabled()
-                ? getOutgoing()
-                : getWithoutDialback();
-            Set<OutgoingSession> sessions = sessionMap.get(session.getDomain());
+            if (!((OutgoingSession) session).isDialbackEnabled()) {
+                return;
+            }
+            Set<OutgoingSession> sessions = getOutgoing().get(session.getDomain());
             if (sessions != null) {
                 sessions.remove(session);
             }

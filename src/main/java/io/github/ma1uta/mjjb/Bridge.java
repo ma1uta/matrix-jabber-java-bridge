@@ -20,11 +20,6 @@ import org.jdbi.v3.postgres.PostgresPlugin;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import rocks.xmpp.addr.Jid;
-import rocks.xmpp.core.stanza.model.Presence;
-import rocks.xmpp.core.stanza.model.server.ServerPresence;
-
-import java.util.Locale;
 
 /**
  * Matrix-XMPP bridge.
@@ -73,19 +68,6 @@ public class Bridge {
             }
             dataSource.close();
         }));
-
-        this.xmppServer.send(ServerPresence.from(new Presence(
-            Jid.of("admin@xmppsablin"),
-            Presence.Type.SUBSCRIBE,
-            null,
-            null,
-            null,
-            null,
-            Jid.of("tolya@mjjbsablin"),
-            Locale.ENGLISH,
-            null,
-            null
-        )));
     }
 
     private RouterFactory initRouters(AppConfig config) {

@@ -16,11 +16,11 @@
 
 package io.github.ma1uta.mjjb.xmpp.babbler.netty;
 
+import io.github.ma1uta.mjjb.xmpp.babbler.xml.XmppStreamDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import rocks.xmpp.core.stream.model.StreamElement;
-import rocks.xmpp.nio.codec.XmppStreamDecoder;
 
 import java.nio.ByteBuffer;
 import java.util.List;

@@ -123,4 +123,15 @@ public abstract class AbstractRouter<T> implements Function<T, Boolean> {
         MatrixConfig config = getMatrixServer().getConfig();
         return Id.Sigil.USER + config.getPrefix() + prepMxid + ":" + config.getHomeserver();
     }
+
+    /**
+     * Encode MXID to double-puppet JID.
+     *
+     * @param mxid MXID.
+     * @return JID.
+     */
+    public String encodeMxidToJid(String mxid) {
+        String mxidWithoutSigil = mxid.substring(1);
+        return mxidWithoutSigil + "@" + getXmppServer().getConfig().getDomain();
+    }
 }

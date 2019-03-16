@@ -32,11 +32,6 @@ public enum DialbackNegotiationResult {
     SUCCESS,
 
     /**
-     * Negotiation has been successfully negotiated and it needs to restart stream.
-     */
-    RESTART,
-
-    /**
      * Negotiation in process.
      */
     IN_PROCESS,

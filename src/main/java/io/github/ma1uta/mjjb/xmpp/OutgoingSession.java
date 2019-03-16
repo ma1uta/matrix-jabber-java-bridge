@@ -45,13 +45,11 @@ public class OutgoingSession extends Session {
     private String compressMethod;
     private ServerDialback.State dialback;
     private AtomicBoolean initialized = new AtomicBoolean(false);
-    private final ConcurrentLinkedQueue<StreamElement> queue;
+    private final ConcurrentLinkedQueue<StreamElement> queue = new ConcurrentLinkedQueue<>();
 
-    public OutgoingSession(XmppServer xmppServer, String domain, boolean dialback,
-                           ConcurrentLinkedQueue<StreamElement> queue) throws JAXBException {
+    public OutgoingSession(XmppServer xmppServer, String domain, boolean dialback) throws JAXBException {
         super(xmppServer);
         this.dialback = dialback ? null : ServerDialback.State.DISABLED;
-        this.queue = queue;
         setDomain(domain);
     }
 
@@ -83,7 +81,8 @@ public class OutgoingSession extends Session {
             StreamHeader header = (StreamHeader) streamElement;
             List<QName> namespaces = header.getAdditionalNamespaces();
             for (QName namespace : namespaces) {
-                if (ServerDialback.NAMESPACE.equals(namespace.getNamespaceURI())
+                if (dialback() == null
+                    && ServerDialback.NAMESPACE.equals(namespace.getNamespaceURI())
                     && ServerDialback.PREFIX.equals(namespace.getPrefix())) {
                     dialback(ServerDialback.State.SUPPORT);
                 }
@@ -112,9 +111,11 @@ public class OutgoingSession extends Session {
         }
         if (streamElement instanceof StreamFeatures) {
             StreamFeatures features = (StreamFeatures) streamElement;
-            for (Object feature : features.getFeatures()) {
-                if (feature instanceof Dialback) {
-                    dialback(ServerDialback.State.SUPPORT);
+            if (dialback() == null) {
+                for (Object feature : features.getFeatures()) {
+                    if (feature instanceof Dialback) {
+                        dialback(ServerDialback.State.SUPPORT);
+                    }
                 }
             }
             for (Object feature : features.getFeatures()) {
@@ -139,7 +140,6 @@ public class OutgoingSession extends Session {
             case IN_PROCESS:
             case FAILED:
                 return false;
-            case RESTART:
             case SUCCESS:
             case IGNORED:
             default:

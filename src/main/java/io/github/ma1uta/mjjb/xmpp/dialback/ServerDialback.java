@@ -17,7 +17,6 @@
 package io.github.ma1uta.mjjb.xmpp.dialback;
 
 import io.github.ma1uta.mjjb.Loggers;
-import io.github.ma1uta.mjjb.xmpp.IncomingSession;
 import io.github.ma1uta.mjjb.xmpp.OutgoingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -33,7 +32,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -64,6 +62,8 @@ public class ServerDialback {
     private MessageDigest digest;
 
     private Cache<String, String> keyCache;
+    private Cache<String, OutgoingSession> waitingConnections;
+    private Cache<OutgoingSession, TcpBinding> verifyingConnections;
 
     public ServerDialback(XmppServer server) {
         this.server = server;
@@ -73,6 +73,20 @@ public class ServerDialback {
             .entryCapacity(CACHE_CAPACITY)
             .expireAfterWrite(1L, TimeUnit.HOURS)
             .build();
+        this.waitingConnections = new Cache2kBuilder<String, OutgoingSession>() {
+        }
+            .name("waitingConnections")
+            .entryCapacity(CACHE_CAPACITY)
+            .expireAfterWrite(1L, TimeUnit.HOURS)
+            .build();
+
+        this.verifyingConnections = new Cache2kBuilder<OutgoingSession, TcpBinding>() {
+        }
+            .name("verifyingConnections")
+            .entryCapacity(CACHE_CAPACITY)
+            .expireAfterWrite(1L, TimeUnit.HOURS)
+            .build();
+
         try {
             digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -127,14 +141,15 @@ public class ServerDialback {
     public DialbackNegotiationResult negotiateOutgoing(OutgoingSession session, Object streamElement) {
         State status = session.dialback();
 
-        // pass if validated.
+        // pass if trusted or disable.
         if (State.TRUSTED == status || State.DISABLED == status) {
             return DialbackNegotiationResult.SUCCESS;
         }
 
-        // initiate dialback negotiation.
-        if (State.SUPPORT.equals(status)) {
+        // send an initial <db:result/> element.
+        if (State.SUPPORT == status) {
             session.dialback(State.SENT);
+            waitingConnections.put(session.getDomain(), session);
             session.sendDirect(new Result(
                 UUID.randomUUID().toString(),                       // id
                 Jid.of(session.getDomain()),                        // to
@@ -144,30 +159,28 @@ public class ServerDialback {
             return DialbackNegotiationResult.IN_PROCESS;
         }
 
-        if (status == State.SENT && streamElement instanceof Result) {
+        // check <db:result> with answer
+        if (State.SENT == status && streamElement instanceof Result) {
             Result result = (Result) streamElement;
             if (DialbackElement.DialbackType.valid == DialbackElement.DialbackType.valueOf(result.getType())) {
                 session.dialback(State.TRUSTED);
-                return DialbackNegotiationResult.RESTART;
+                waitingConnections.remove(result.getFrom().getDomain());
+                return DialbackNegotiationResult.SUCCESS;
             }
         }
 
+        // receive <db:verify/> with answer and send <db:result/> with answer
         if (streamElement instanceof Verify) {
             Verify verify = (Verify) streamElement;
-            IncomingSession incomingSession = null;
-            for (Set<IncomingSession> incomingSessions : getServer().getIncoming().values()) {
-                for (IncomingSession item : incomingSessions) {
-                    if (item.getDomain().equals(verify.getFrom().getDomain())) {
-                        incomingSession = item;
-                        break;
-                    }
-                }
-                if (incomingSession != null) {
-                    break;
-                }
-            }
+            TcpBinding incomingSession = verifyingConnections.get(session);
             if (incomingSession != null) {
+                verifyingConnections.remove(session);
                 incomingSession.send(new Result(verify.getId(), verify.getFrom(), verify.getTo(), null, verify.getType()));
+                try {
+                    session.close();
+                } catch (Exception e) {
+                    LOGGER.error(String.format("Failed close session without dialback to \'%s\'", session.getDomain()), e);
+                }
             }
         }
 
@@ -182,11 +195,14 @@ public class ServerDialback {
      * @return {@code true} if connection is verified and trusted else {@code false}.
      */
     public DialbackNegotiationResult negotiateIncoming(TcpBinding connection, Object streamElement) {
+        // receive <db:result/> and send <db:verify/>.
         if (streamElement instanceof Result) {
             Result result = (Result) streamElement;
             String id = result.getId() != null ? result.getId() : UUID.randomUUID().toString();
             try {
-                getServer().sendWithoutDialback(result.getTo(), new Verify(id, result.getFrom(), result.getTo(), result.getText(), null));
+                OutgoingSession session = new OutgoingSession(getServer(), result.getTo().getDomain(), false);
+                verifyingConnections.put(session, connection);
+                session.send(new Verify(id, result.getFrom(), result.getTo(), result.getText(), null));
             } catch (Exception e) {
                 LOGGER.error("Unable to send message", e);
                 return DialbackNegotiationResult.FAILED;
@@ -194,20 +210,10 @@ public class ServerDialback {
             return DialbackNegotiationResult.IN_PROCESS;
         }
 
+        // check <db:verify/> and answer with <db:verify/>
         if (streamElement instanceof Verify) {
             Verify verify = (Verify) streamElement;
-            Set<OutgoingSession> outgoingSessions = getServer().getOutgoing().get(verify.getFrom().getDomain());
-            if (outgoingSessions == null) {
-                sendVerify(connection, verify, DialbackElement.DialbackType.invalid);
-                return DialbackNegotiationResult.FAILED;
-            }
-            OutgoingSession outgoingSession = null;
-            for (OutgoingSession item : outgoingSessions) {
-                if (State.SENT == item.dialback() && keyCache.get(item.getConnection().getStreamId()) != null) {
-                    outgoingSession = item;
-                    break;
-                }
-            }
+            OutgoingSession outgoingSession = waitingConnections.get(verify.getFrom().getDomain());
             if (outgoingSession == null) {
                 sendVerify(connection, verify, DialbackElement.DialbackType.invalid);
                 return DialbackNegotiationResult.FAILED;
@@ -227,11 +233,11 @@ public class ServerDialback {
     protected void sendVerify(TcpBinding connection, Verify verify, DialbackElement.DialbackType type) {
         connection.send(
             new Verify(
-                verify.getId(),
-                verify.getFrom(),
-                verify.getTo(),
-                null,
-                type.name()
+                verify.getId(),     // id
+                verify.getFrom(),   // from
+                verify.getTo(),     // to
+                null,           // empty
+                type.name()         // result
             )
         );
     }

@@ -60,6 +60,7 @@ public class DirectInviteRouter extends AbstractRouter<RoomMember> {
 
             try {
                 Presence presence = new Presence(Jid.of(jid), Presence.Type.SUBSCRIBE, null);
+                presence.setFrom(Jid.of(encodeMxidToJid(roomMember.getSender())));
                 getXmppServer().send(ServerPresence.from(presence));
             } catch (Exception e) {
                 LOGGER.error("Unable to send message.", e);
