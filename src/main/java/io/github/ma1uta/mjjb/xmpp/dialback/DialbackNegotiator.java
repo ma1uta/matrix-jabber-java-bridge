@@ -32,7 +32,7 @@ public class DialbackNegotiator extends ServerStreamFeatureNegotiator<Dialback> 
     /**
      * Constructs the negotiator.
      */
-    protected DialbackNegotiator(TcpBinding connection, XmppServer server) {
+    public DialbackNegotiator(TcpBinding connection, XmppServer server) {
         super(Dialback.class);
         this.connection = connection;
         this.server = server;
@@ -51,6 +51,7 @@ public class DialbackNegotiator extends ServerStreamFeatureNegotiator<Dialback> 
             case FAILED:
                 connection.closeAsync();
                 break;
+            case IGNORED:
             default:
                 // nothing to do
         }

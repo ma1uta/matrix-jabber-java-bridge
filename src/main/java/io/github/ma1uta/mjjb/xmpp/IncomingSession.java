@@ -22,8 +22,11 @@ import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.stanza.model.Stanza;
 import rocks.xmpp.core.stream.StreamNegotiationResult;
 import rocks.xmpp.core.stream.model.StreamElement;
+import rocks.xmpp.core.stream.model.StreamError;
+import rocks.xmpp.core.stream.model.StreamErrorException;
 import rocks.xmpp.core.stream.model.StreamFeatures;
 import rocks.xmpp.core.stream.model.StreamHeader;
+import rocks.xmpp.core.stream.model.errors.Condition;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -41,12 +44,16 @@ public class IncomingSession extends Session {
 
     @Override
     public boolean handleStream(Object streamElement) throws XmppException {
+        if (isStanzaInvalid(streamElement)) {
+            throw new StreamErrorException(new StreamError(Condition.IMPROPER_ADDRESSING));
+        }
         if (streamElement instanceof StreamElement
             && getStreamFeaturesManager().handleElement((StreamElement) streamElement) == StreamNegotiationResult.RESTART) {
             return true;
         }
         if (streamElement instanceof StreamHeader) {
             StreamHeader streamHeader = (StreamHeader) streamElement;
+            setDomain(streamHeader.getFrom().getDomain());
             String streamId = streamHeader.getId() != null ? streamHeader.getId() : UUID.randomUUID().toString();
             // send stream header response
             send(StreamHeader.responseServerToServer(
@@ -61,7 +68,7 @@ public class IncomingSession extends Session {
             return false;
         }
 
-        switch (getXmppServer().dialback().negotiateIncoming(this.getConnection(), streamElement)) {
+        /*switch (getXmppServer().dialback().negotiateIncoming(this.getConnection(), streamElement)) {
             case FAILED:
             case IN_PROCESS:
             case SUCCESS:
@@ -69,7 +76,7 @@ public class IncomingSession extends Session {
             case IGNORED:
             default:
                 // nothing to do
-        }
+        }*/
 
         if (streamElement instanceof Stanza) {
             getXmppServer().process((Stanza) streamElement);
@@ -80,5 +87,10 @@ public class IncomingSession extends Session {
     @Override
     public void send(StreamElement streamElement) {
         getExecutor().execute(() -> getConnection().send(streamElement));
+    }
+
+    @Override
+    protected String direction() {
+        return "income";
     }
 }

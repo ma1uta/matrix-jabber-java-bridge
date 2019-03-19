@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -103,20 +104,15 @@ public class SrvNameResolver {
     }
 
     private String extractHostname(ByteBuf content) {
-        byte[] bytes = new byte[content.readableBytes()];
-        content.readBytes(bytes);
-        char[] chars = new char[bytes.length];
-        for (int i = 0; i < bytes.length; i++) {
-            chars[i] = Character.isAlphabetic(bytes[i]) || Character.isDigit(bytes[i]) ? (char) bytes[i] : '.';
+        byte count = content.readByte();
+        StringBuilder hostnameBuilder = new StringBuilder(content.capacity());
+        while (count > 0) {
+            byte[] bytes = new byte[count];
+            content.readBytes(bytes);
+            hostnameBuilder.append(new String(bytes, StandardCharsets.US_ASCII));
+            count = content.readByte();
         }
-        String hostname = new String(chars);
-        if (hostname.startsWith(".")) {
-            hostname = hostname.substring(1);
-        }
-        if (hostname.endsWith(".")) {
-            hostname = hostname.substring(0, hostname.length() - 1);
-        }
-        return hostname;
+        return hostnameBuilder.toString();
     }
 
     private static class Record {

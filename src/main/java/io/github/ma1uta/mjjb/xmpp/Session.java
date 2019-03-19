@@ -17,11 +17,15 @@
 package io.github.ma1uta.mjjb.xmpp;
 
 import io.github.ma1uta.mjjb.Loggers;
+import io.github.ma1uta.mjjb.xmpp.dialback.Result;
+import io.github.ma1uta.mjjb.xmpp.dialback.Verify;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.net.TcpBinding;
+import rocks.xmpp.core.stanza.model.Stanza;
 import rocks.xmpp.core.stream.model.StreamElement;
+import rocks.xmpp.core.stream.model.StreamErrorException;
 import rocks.xmpp.core.stream.server.ServerStreamFeaturesManager;
 
 import java.util.Objects;
@@ -77,13 +81,20 @@ public abstract class Session implements AutoCloseable {
     public abstract void send(StreamElement streamElement);
 
     /**
+     * Session direction. Incoming or outgoing.
+     *
+     * @return session direction.
+     */
+    protected abstract String direction();
+
+    /**
      * Read handler.
      *
      * @param xml     string representation of the stanza.
      * @param element stanza.
      */
     public void onRead(String xml, StreamElement element) {
-        STANZA_LOGGER.debug(" IN: " + xml);
+        log(xml, element, " IN");
     }
 
     /**
@@ -93,7 +104,47 @@ public abstract class Session implements AutoCloseable {
      * @param element stanza.
      */
     public void onWrite(String xml, StreamElement element) {
-        STANZA_LOGGER.debug("OUT: " + xml);
+        log(xml, element, "OUT");
+    }
+
+    protected void log(String xml, StreamElement element, String action) {
+        if (STANZA_LOGGER.isDebugEnabled()) {
+            String id = getConnection().getStreamId() != null ? getConnection().getStreamId() : "new";
+            String domain = getDomain();
+            if (domain == null && element instanceof Stanza) {
+                domain = ((Stanza) element).getFrom().getDomain();
+            }
+            if (domain == null) {
+                domain = "unknown";
+            }
+            STANZA_LOGGER.debug("[{} : {} : {}] {}: {}", direction(), domain, id, action, xml);
+        }
+    }
+
+    /**
+     * Validate stanza.
+     * <br/>
+     * Enforce the target equals current xmpp domain.
+     *
+     * @param streamElement stream element to validate.
+     */
+    protected boolean isStanzaInvalid(Object streamElement) {
+        if (streamElement instanceof Stanza) {
+            return isTargetDomainWrong(((Stanza) streamElement).getTo().getDomain());
+        } else if (streamElement instanceof Result) {
+            return isTargetDomainWrong(((Result) streamElement).getTo().getDomain());
+        } else if (streamElement instanceof Verify) {
+            return isTargetDomainWrong(((Verify) streamElement).getTo().getDomain());
+        }
+        return false;
+    }
+
+    private boolean isTargetDomainWrong(String domain) {
+        if (!getXmppServer().getConfig().getDomain().equals(domain)) {
+            STANZA_LOGGER.error(String.format("Wrong target: %s", domain));
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -102,14 +153,17 @@ public abstract class Session implements AutoCloseable {
      * @param throwable exception.
      */
     public void onException(Throwable throwable) {
-        LOGGER.error("XMPP exception: ", throwable);
+        String id = getConnection().getStreamId() != null ? getConnection().getStreamId() : Integer.toString(hashCode());
+        LOGGER.error(String.format("[%s : %s : %s] XMPP exception: ", direction(), getDomain(), id), throwable);
         if (throwable instanceof StreamElement) {
             getConnection().send((StreamElement) throwable);
+        } else if (throwable instanceof StreamErrorException) {
+            getConnection().send(((StreamErrorException) throwable).getError());
         }
         try {
             close();
         } catch (Exception e) {
-            LOGGER.error("Failed close xmpp connection", e);
+            LOGGER.error(String.format("[%s : %s : %s] Failed close xmpp connection", direction(), getDomain(), id), e);
         }
     }
 

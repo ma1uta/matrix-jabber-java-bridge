@@ -200,7 +200,7 @@ public class ServerDialback {
             Result result = (Result) streamElement;
             String id = result.getId() != null ? result.getId() : UUID.randomUUID().toString();
             try {
-                OutgoingSession session = new OutgoingSession(getServer(), result.getTo().getDomain(), false);
+                OutgoingSession session = new OutgoingSession(getServer(), result.getFrom().getDomain(), false);
                 verifyingConnections.put(session, connection);
                 session.send(new Verify(id, result.getFrom(), result.getTo(), result.getText(), null));
             } catch (Exception e) {

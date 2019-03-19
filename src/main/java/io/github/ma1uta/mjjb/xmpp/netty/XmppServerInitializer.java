@@ -16,13 +16,17 @@
 
 package io.github.ma1uta.mjjb.xmpp.netty;
 
+import io.github.ma1uta.mjjb.Loggers;
 import io.github.ma1uta.mjjb.xmpp.IncomingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.github.ma1uta.mjjb.xmpp.babbler.netty.NettyChannelConnection;
+import io.github.ma1uta.mjjb.xmpp.dialback.DialbackNegotiator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.compression.ZlibWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import rocks.xmpp.core.extensions.compress.server.CompressionNegotiator;
 import rocks.xmpp.core.net.ChannelEncryption;
 import rocks.xmpp.core.tls.server.StartTlsNegotiator;
@@ -31,6 +35,8 @@ import rocks.xmpp.core.tls.server.StartTlsNegotiator;
  * XMPP server netty channel initializer.
  */
 public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, IncomingSession> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Loggers.LOGGER);
 
     public XmppServerInitializer(XmppServer xmppServer) {
         super(xmppServer);
@@ -56,6 +62,7 @@ public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, I
         }
         session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection,
             ZlibWrapper.GZIP.name().toLowerCase(), ZlibWrapper.ZLIB.name().toLowerCase()));
+        session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new DialbackNegotiator(connection, getServer()));
         getServer().newIncomingSession(session);
         ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
 
@@ -69,5 +76,11 @@ public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, I
                 session.close();
             }
         });
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        LOGGER.error("Unable to open incoming session.", cause);
+        super.exceptionCaught(ctx, cause);
     }
 }

@@ -19,6 +19,7 @@ package io.github.ma1uta.mjjb.xmpp.dialback;
 import rocks.xmpp.core.stream.model.StreamElement;
 import rocks.xmpp.core.stream.model.StreamFeature;
 
+import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 
@@ -29,7 +30,7 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(factoryMethod = "create")
 public class Dialback extends StreamFeature implements StreamElement {
 
-    private DialbackError value = new DialbackError();
+    private DialbackError errors = new DialbackError();
 
     /**
      * The {@code <dialback/>} element.
@@ -44,12 +45,13 @@ public class Dialback extends StreamFeature implements StreamElement {
         return "Dialback";
     }
 
-    public DialbackError getValue() {
-        return value;
+    @XmlElement(name = "errors", namespace = "urn:xmpp:features:dialback")
+    public DialbackError getErrors() {
+        return errors;
     }
 
-    public void setValue(DialbackError value) {
-        this.value = value;
+    public void setErrors(DialbackError errors) {
+        this.errors = errors;
     }
 
     /**

@@ -14,12 +14,21 @@
  * limitations under the License.
  */
 
+/**
+ * Server Dialback (https://xmpp.org/extensions/xep-0220.html).
+ */
+
+@XmlSchema(
+    xmlns = {
+        @XmlNs(prefix = ServerDialback.PREFIX, namespaceURI = ServerDialback.NAMESPACE)
+    },
+    namespace = StreamHeader.STREAM_NAMESPACE,
+    elementFormDefault = XmlNsForm.QUALIFIED
+)
 package io.github.ma1uta.mjjb.xmpp.dialback;
 
-import rocks.xmpp.core.stream.model.StreamElement;
+import rocks.xmpp.core.stream.model.StreamHeader;
 
-/**
- * Dialback error.
- */
-public class DialbackError implements StreamElement {
-}
+import javax.xml.bind.annotation.XmlNs;
+import javax.xml.bind.annotation.XmlNsForm;
+import javax.xml.bind.annotation.XmlSchema;

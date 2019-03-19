@@ -23,8 +23,11 @@ import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.XmppException;
 import rocks.xmpp.core.stream.model.StreamElement;
+import rocks.xmpp.core.stream.model.StreamError;
+import rocks.xmpp.core.stream.model.StreamErrorException;
 import rocks.xmpp.core.stream.model.StreamFeatures;
 import rocks.xmpp.core.stream.model.StreamHeader;
+import rocks.xmpp.core.stream.model.errors.Condition;
 import rocks.xmpp.core.tls.model.Proceed;
 import rocks.xmpp.core.tls.model.StartTls;
 import rocks.xmpp.extensions.compress.model.StreamCompression;
@@ -77,6 +80,9 @@ public class OutgoingSession extends Session {
 
     @Override
     public boolean handleStream(Object streamElement) throws XmppException {
+        if (isStanzaInvalid(streamElement)) {
+            throw new StreamErrorException(new StreamError(Condition.IMPROPER_ADDRESSING));
+        }
         if (streamElement instanceof StreamHeader) {
             StreamHeader header = (StreamHeader) streamElement;
             List<QName> namespaces = header.getAdditionalNamespaces();
@@ -183,6 +189,11 @@ public class OutgoingSession extends Session {
     public void send(StreamElement streamElement) {
         queue.offer(streamElement);
         tryToSend();
+    }
+
+    @Override
+    protected String direction() {
+        return "outcome";
     }
 
     /**

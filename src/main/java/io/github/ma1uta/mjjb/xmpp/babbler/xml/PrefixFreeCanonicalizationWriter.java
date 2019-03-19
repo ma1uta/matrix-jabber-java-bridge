@@ -175,7 +175,7 @@ final class PrefixFreeCanonicalizationWriter implements XMLStreamWriter, Namespa
     @Override
     public void writeNamespace(final String prefix, final String namespaceURI) throws XMLStreamException {
         // do not write a namespace with a prefix, except it's allowed.
-        if (shouldWriteNamespace(namespaceURI) || isDialback(prefix, namespaceURI)) {
+        if (shouldWriteNamespace(namespaceURI)) {
             xsw.writeNamespace(prefix, namespaceURI);
         } else {
             urisByPrefix.put(prefix, namespaceURI);
@@ -296,9 +296,7 @@ final class PrefixFreeCanonicalizationWriter implements XMLStreamWriter, Namespa
     }
 
     private boolean shouldWriteNamespacePrefix(String namespaceURI) {
-        return shouldWriteNamespace(namespaceURI)
-            || StreamHeader.STREAM_NAMESPACE.equals(namespaceURI)
-            || ServerDialback.NAMESPACE.equals(namespaceURI);
+        return shouldWriteNamespace(namespaceURI) || StreamHeader.STREAM_NAMESPACE.equals(namespaceURI);
     }
 
     private boolean isDialback(String prefix, String namespaceURI) {

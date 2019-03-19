@@ -22,12 +22,15 @@ import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * XMPP server netty channel initializer.
  */
 public class XmppClientInitializer extends XmppNettyInitializer<Channel, OutgoingSession> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Loggers.LOGGER);
 
     private final OutgoingSession session;
 
@@ -74,5 +77,11 @@ public class XmppClientInitializer extends XmppNettyInitializer<Channel, Outgoin
                 super.userEventTriggered(ctx, evt);
             }
         });
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        LOGGER.error("Unable to open outgoing session.", cause);
+        super.exceptionCaught(ctx, cause);
     }
 }
