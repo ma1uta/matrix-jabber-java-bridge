@@ -21,6 +21,7 @@ import io.github.ma1uta.mjjb.xmpp.IncomingSession;
 import io.github.ma1uta.mjjb.xmpp.XmppServer;
 import io.github.ma1uta.mjjb.xmpp.babbler.netty.NettyChannelConnection;
 import io.github.ma1uta.mjjb.xmpp.dialback.DialbackNegotiator;
+import io.github.ma1uta.mjjb.xmpp.sasl.SaslNegotiator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.SocketChannel;
@@ -63,6 +64,7 @@ public class XmppServerInitializer extends XmppNettyInitializer<SocketChannel, I
         session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new CompressionNegotiator(connection,
             ZlibWrapper.GZIP.name().toLowerCase(), ZlibWrapper.ZLIB.name().toLowerCase()));
         session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new DialbackNegotiator(connection, getServer()));
+        session.getStreamFeaturesManager().registerStreamFeatureNegotiator(new SaslNegotiator(session));
         getServer().newIncomingSession(session);
         ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
 

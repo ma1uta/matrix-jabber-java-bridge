@@ -22,6 +22,12 @@ import io.github.ma1uta.mjjb.xmpp.dialback.ServerDialback;
 import io.github.ma1uta.mjjb.xmpp.netty.XmppClientInitializer;
 import rocks.xmpp.addr.Jid;
 import rocks.xmpp.core.XmppException;
+import rocks.xmpp.core.sasl.model.Abort;
+import rocks.xmpp.core.sasl.model.Auth;
+import rocks.xmpp.core.sasl.model.Failure;
+import rocks.xmpp.core.sasl.model.Mechanisms;
+import rocks.xmpp.core.sasl.model.Success;
+import rocks.xmpp.core.stream.StreamNegotiationException;
 import rocks.xmpp.core.stream.model.StreamElement;
 import rocks.xmpp.core.stream.model.StreamError;
 import rocks.xmpp.core.stream.model.StreamErrorException;
@@ -33,6 +39,8 @@ import rocks.xmpp.core.tls.model.StartTls;
 import rocks.xmpp.extensions.compress.model.StreamCompression;
 import rocks.xmpp.extensions.compress.model.feature.CompressionFeature;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -45,8 +53,14 @@ import javax.xml.namespace.QName;
  */
 public class OutgoingSession extends Session {
 
+    /**
+     * 'EXTERNAL' sasl mechanism.
+     */
+    public static final String EXTERNAL = "EXTERNAL";
+
     private String compressMethod;
     private ServerDialback.State dialback;
+    private Collection<String> supported;
     private AtomicBoolean initialized = new AtomicBoolean(false);
     private final ConcurrentLinkedQueue<StreamElement> queue = new ConcurrentLinkedQueue<>();
 
@@ -139,21 +153,39 @@ public class OutgoingSession extends Session {
                         return false;
                     }
                 }
+                if (feature instanceof Mechanisms) {
+                    Mechanisms mechanisms = (Mechanisms) feature;
+                    supported = mechanisms.getMechanisms();
+                    if (supported.contains(EXTERNAL)) {
+                        sendDirect(new Auth(EXTERNAL, "=".getBytes(StandardCharsets.US_ASCII)));
+                    }
+                    return false;
+                }
             }
         }
-
-        switch (getXmppServer().dialback().negotiateOutgoing(this, streamElement)) {
-            case IN_PROCESS:
-            case FAILED:
-                return false;
-            case SUCCESS:
-            case IGNORED:
-            default:
-                // nothing to do
+        if (streamElement instanceof Success) {
+            initialized.set(true);
         }
-        // send all queued stanzas.
-        if (ServerDialback.State.DISABLED.equals(dialback()) || ServerDialback.State.TRUSTED.equals(dialback())) {
-            initialized.compareAndSet(false, true);
+        if (streamElement instanceof Abort || streamElement instanceof Failure) {
+            throw new StreamNegotiationException(new Failure(Failure.Condition.NOT_AUTHORIZED));
+        }
+
+        if (!initialized.get()) {
+            switch (getXmppServer().dialback().negotiateOutgoing(this, streamElement)) {
+                case IN_PROCESS:
+                case FAILED:
+                    return false;
+                case SUCCESS:
+                case IGNORED:
+                default:
+                    // nothing to do
+            }
+            // send all queued stanzas.
+            if (ServerDialback.State.DISABLED.equals(dialback()) || ServerDialback.State.TRUSTED.equals(dialback())) {
+                initialized.compareAndSet(false, true);
+            }
+        }
+        if (initialized.get()) {
             tryToSend();
         }
         return false;

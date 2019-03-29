@@ -68,16 +68,6 @@ public class IncomingSession extends Session {
             return false;
         }
 
-        /*switch (getXmppServer().dialback().negotiateIncoming(this.getConnection(), streamElement)) {
-            case FAILED:
-            case IN_PROCESS:
-            case SUCCESS:
-                return false;
-            case IGNORED:
-            default:
-                // nothing to do
-        }*/
-
         if (streamElement instanceof Stanza) {
             getXmppServer().process((Stanza) streamElement);
         }
